@@ -24,13 +24,27 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           # Both relevar_core.py modules import openpyxl at module load time,
-          # so the offline parse test's import chain needs it. Install from the
-          # repo's requirements.txt files (root + web-app) to cover both tests.
-          pip install -r requirements.txt
-          pip install -r web-app/requirements.txt
+          # so the offline parse test's import chain needs it.
+          # Only the base deps: the audio extras (tiddl / yt-dlp / ffmpeg) are
+          # deliberately NOT installed here — the tests are offline and must
+          # pass without them, which also proves the graceful degradation.
+          pip install streamlit openpyxl
 
       - name: Run offline parse test (root)
         run: python test_parse_description.py
 
       - name: Run offline parse test (web-app)
         run: python web-app/test_parse_description.py
+
+      - name: Run product grouping + filters test
+        run: python test_productos.py
+
+      - name: Run deliverable packaging test
+        run: python test_paquete.py
+
+      - name: Check modules import without the audio extras
+        run: |
+          python -c "import productos, portadas, audio, paquete; \
+            e = audio.verificar_entorno(); \
+            assert e['puede_flac'] is False, 'sin tiddl/ffmpeg no debe habilitar FLAC'; \
+            print('degradacion correcta:', e)"

@@ -1,2 +1,15 @@
 streamlit>=1.40
 openpyxl>=3.1
+
+# --- Opcionales: sólo para el módulo de audio del migrador -----------------
+# La app funciona sin estos (relevamiento, planillas y portadas no los usan).
+# Si faltan, `audio.verificar_entorno()` lo detecta y la UI no ofrece audio.
+#
+#   tiddl   → descarga FLAC lossless de Tidal. Requiere que cada usuario
+#             conecte SU PROPIA cuenta paga; no se comparte una cuenta.
+#   yt-dlp  → descarga el audio de referencia (lossy) de YouTube.
+#
+# Además hace falta `ffmpeg` en el PATH (no es un paquete de pip):
+#   https://ffmpeg.org/download.html
+tiddl>=3.4.1
+yt-dlp>=2024.1.0
