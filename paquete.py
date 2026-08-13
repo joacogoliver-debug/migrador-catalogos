@@ -263,6 +263,19 @@ salió el audio:
 
 Si un track figura como LOSSY, hay que conseguir el máster original con el
 artista o el sello antes de la entrega. El reporte lista exactamente cuáles.
+
+OTROS DATOS QUE SON ESTIMADOS
+-----------------------------
+YouTube no declara todo lo que necesita una ficha de release, así que dos campos
+son aproximaciones y conviene verificarlos:
+
+  Tipo (single/EP/álbum)  Se deduce de la cantidad de tracks (1-3 single,
+                          4-6 EP, 7+ álbum). Un EP corto puede figurar como
+                          single.
+
+  Orden de los tracks     Cuando se pudo cruzar con Tidal por ISRC, el número
+                          de track es el real. Si no, es un estimado por fecha
+                          de subida y el reporte lo marca como "sin confirmar".
 """
 
 
@@ -281,9 +294,11 @@ def build_zip(productos, artista, out_path, entorno=None, con_tidal=False,
     # ZIP_STORED para el audio: FLAC y Opus ya están comprimidos, deflate
     # gastaría CPU sin ganar espacio. Sí comprimimos planillas y texto.
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as z:
-        z.writestr(f"{raiz}/_LEEME.txt", LEEME)
+        # Los .txt van con BOM (utf-8-sig): los abre gente en Windows y sin BOM
+        # algunos editores viejos muestran los acentos rotos.
+        z.writestr(f"{raiz}/_LEEME.txt", LEEME.encode("utf-8-sig"))
         z.writestr(f"{raiz}/_Reporte de migracion.txt",
-                   reporte_texto(productos, artista, entorno, con_tidal))
+                   reporte_texto(productos, artista, entorno, con_tidal).encode("utf-8-sig"))
         if incluir_planilla:
             z.writestr(f"{raiz}/_Catalogo completo.xlsx",
                        planilla_maestra_bytes(productos, artista))

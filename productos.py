@@ -20,9 +20,14 @@ from collections import Counter
 
 SIN_ALBUM = "(single / sin álbum)"
 
-# Umbrales de formato. Un single puede traer un lado B, y la frontera EP/álbum
-# más usada en la industria es 6-7 tracks.
-MAX_TRACKS_SINGLE = 2
+# Umbrales de formato, siguiendo la convención que usan las distribuidoras:
+# 1-3 tracks = single, 4-6 = EP, 7+ = álbum.
+#
+# Es una heurística por cantidad de tracks, no un dato del release: YouTube no
+# declara el formato. Un release de 3 tracks puede ser un EP y quedar acá como
+# single. Por eso el tipo se muestra como orientativo y conviene verificarlo
+# antes de la entrega; el reporte lo aclara.
+MAX_TRACKS_SINGLE = 3
 MAX_TRACKS_EP = 6
 
 

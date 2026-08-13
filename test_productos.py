@@ -57,7 +57,7 @@ def main():
     ps = pr.group_products(tracks, artist="Artista")
     expect("album.n_productos", len(ps), 1)
     expect("album.track_count", ps[0]["track_count"], 3)
-    expect("album.kind", ps[0]["kind"], "ep")          # 3 tracks -> EP
+    expect("album.kind", ps[0]["kind"], "single")      # 3 tracks -> single (convención)
     expect("album.title", ps[0]["title"], "Mi Album")
     expect("album.year", ps[0]["release_year"], 2019)
     # Orden provisorio por fecha de subida, marcado como no confirmado.
@@ -94,11 +94,13 @@ def main():
             [_t(f"T{i}", "Disco", 2020, date=f"2020-01-{i:02d}") for i in range(1, n + 1)]
         )[0]["kind"]
 
+    # Convención de distribuidoras: 1-3 single, 4-6 EP, 7+ álbum.
     expect("kind.1", kind_de(1), "single")
-    expect("kind.2", kind_de(2), "single")
-    expect("kind.3", kind_de(3), "ep")
+    expect("kind.3", kind_de(3), "single")
+    expect("kind.4", kind_de(4), "ep")
     expect("kind.6", kind_de(6), "ep")
     expect("kind.7", kind_de(7), "album")
+    expect("kind.12", kind_de(12), "album")
 
     # --- Consolidación de datos despareros -------------------------------
     # Dos tracks traen UPC y sello; uno viene vacío. Gana el valor no vacío.

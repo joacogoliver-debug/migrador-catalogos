@@ -32,6 +32,32 @@ def _load(nombre):
     return mod
 
 
+def _logs_son_cp1252(carpeta):
+    """True si ninguna línea que llama a log(...) trae caracteres que la consola
+    de Windows (cp1252) no pueda imprimir.
+
+    Mira el código fuente en vez de ejecutar los logs porque las rutas que los
+    emiten necesitan red y credenciales.
+    """
+    import glob
+    ok = True
+    for ruta in glob.glob(os.path.join(carpeta, "*.py")):
+        if os.path.basename(ruta).startswith("test_"):
+            continue
+        with open(ruta, encoding="utf-8") as f:
+            for i, linea in enumerate(f, 1):
+                if "log(" not in linea and "print(" not in linea:
+                    continue
+                for ch in linea:
+                    if ord(ch) > 127:
+                        try:
+                            ch.encode("cp1252")
+                        except UnicodeEncodeError:
+                            print(f"    log no imprimible: {os.path.basename(ruta)}:{i} {ch!r}")
+                            ok = False
+    return ok
+
+
 def main():
     _load("audio")                      # paquete.py importa de audio
     pq = _load("paquete")
@@ -124,7 +150,12 @@ def main():
             check("audio.sin_audio_no_aparece",
                   not any("Tema Sin Audio" in n for n in nombres))
 
-            reporte = z.read(f"{raiz}/_Reporte de migracion.txt").decode("utf-8")
+            crudo = z.read(f"{raiz}/_Reporte de migracion.txt")
+            # Con BOM, para que Windows muestre bien los acentos.
+            check("reporte.bom", crudo.startswith(b"\xef\xbb\xbf"))
+            reporte = crudo.decode("utf-8-sig")
+            # Los acentos tienen que sobrevivir el ida y vuelta.
+            check("reporte.acentos_ok", "MIGRACIÓN" in reporte, reporte[:60])
 
         # --- Contenido del reporte ---------------------------------------
         check("reporte.aptos", "Aptos para entrega (FLAC lossless) : 1" in reporte, reporte[:400])
@@ -175,6 +206,12 @@ def main():
                pq._fuente_corta({"audio_path": "x", "audio_format": ".m4a"}),
                "LOSSY (m4a)")
         expect("fuente.sin", pq._fuente_corta({}), "sin audio")
+
+        # --- Logs imprimibles en consola de Windows ------------------------
+        # Los mensajes de log van a stdout, y la consola de Windows usa cp1252:
+        # un caracter fuera de ese set (p. ej. una flecha ->) tira
+        # UnicodeEncodeError y corta la migración a mitad de camino.
+        check("logs.cp1252", _logs_son_cp1252(HERE), "hay f-strings de log con caracteres no-cp1252")
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

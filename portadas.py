@@ -169,7 +169,9 @@ def fetch_portadas(productos, artista, log=print):
 
     with ThreadPoolExecutor(max_workers=PORTADAS_WORKERS) as ex:
         for i, p in enumerate(ex.map(una, productos), 1):
-            log(f"[portadas] {i}/{len(productos)} {p['title'][:40]} → {p['cover_status']}")
+            # Sin caracteres fuera de cp1252 en los logs: la consola de Windows
+            # los rechaza y tiraría UnicodeEncodeError en medio de la migración.
+            log(f"[portadas] {i}/{len(productos)} {p['title'][:40]} -> {p['cover_status']}")
 
     ok = sum(1 for p in productos if p.get("cover_bytes"))
     log(f"[portadas] listas {ok}/{len(productos)}")

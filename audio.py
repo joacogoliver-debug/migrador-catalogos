@@ -437,7 +437,9 @@ def fetch_audio(productos, session=None, usar_referencia=True, dest_dir=None,
         with ThreadPoolExecutor(max_workers=TIDAL_WORKERS) as ex:
             for i, t in enumerate(ex.map(_tidal, con_tidal), 1):
                 estado = t.get("audio_format") or f"ERROR {t.get('audio_error', '')}"
-                log(f"[audio] tidal {i}/{len(con_tidal)} {t['track'][:40]} → {estado}")
+                # Sin caracteres fuera de cp1252: la consola de Windows los
+                # rechaza y cortaría la migración con UnicodeEncodeError.
+                log(f"[audio] tidal {i}/{len(con_tidal)} {t['track'][:40]} -> {estado}")
 
     # --- Nivel B: YouTube como referencia ---
     fallidos = [t for t in con_tidal if not t.get("audio_path")]
@@ -454,7 +456,7 @@ def fetch_audio(productos, session=None, usar_referencia=True, dest_dir=None,
         with ThreadPoolExecutor(max_workers=YT_WORKERS) as ex:
             for i, t in enumerate(ex.map(_yt, pendientes), 1):
                 estado = t.get("audio_format") or "sin audio"
-                log(f"[audio] yt {i}/{len(pendientes)} {t['track'][:40]} → {estado}")
+                log(f"[audio] yt {i}/{len(pendientes)} {t['track'][:40]} -> {estado}")
 
     aptos = sum(1 for t in tracks if (t.get("audio_format") or "") in FORMATOS_LOSSLESS)
     ref = sum(1 for t in tracks if t.get("audio_path") and (t.get("audio_format") or "") not in FORMATOS_LOSSLESS)
