@@ -106,6 +106,19 @@ La herramienta la usan clientes y artistas externos, así que:
 | `audio.py` | Sesión de Tidal, índice ISRC, descarga FLAC + referencia | tiddl, yt-dlp, ffmpeg |
 | `paquete.py` | Planillas, reporte y ZIP del entregable | openpyxl |
 | `migrar_core.py` | Orquesta los 4 pasos | los de arriba |
+| `app_migrar.py` | La interfaz web (Streamlit) del flujo de 4 pasos | streamlit |
+
+## Datos que son estimados (y hay que verificar)
+
+YouTube no declara todo lo que necesita una ficha de release. Dos campos son
+heurísticas, y tanto el LEEME como el reporte del paquete lo aclaran:
+
+- **Tipo (single / EP / álbum)**: se deduce de la cantidad de tracks siguiendo la
+  convención de las distribuidoras (1-3 single, 4-6 EP, 7+ álbum). Un EP corto
+  puede figurar como single.
+- **Orden de los tracks**: si el producto se cruzó con Tidal por ISRC, el número
+  de track es el real. Si no, es un estimado por fecha de subida y el reporte lo
+  marca como "sin confirmar" en vez de darlo por bueno.
 
 ### Origen de las piezas de terceros
 
@@ -122,6 +135,14 @@ La herramienta la usan clientes y artistas externos, así que:
 > único archivo real es un script ofuscado (base64 + XOR) que reescribe la página
 > en runtime, y tiene un GitHub Action que hace commits falsos cada hora para
 > simular actividad. No usarlo.
+
+## Cómo correrla
+
+```bash
+streamlit run app_migrar.py
+```
+
+El relevador original sigue funcionando aparte con `streamlit run app.py`.
 
 ## Instalación
 
