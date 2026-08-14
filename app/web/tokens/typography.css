@@ -1,0 +1,28 @@
+:root {
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-sans: var(--font-body);
+
+  /* Type scale (desktop-first) */
+  --text-display: 2rem;      /* 32px — page title */
+  --text-h1:      1.5rem;    /* 24px — section heading */
+  --text-h2:      1.25rem;   /* 20px — subsection */
+  --text-h3:      1.0625rem; /* 17px — card heading */
+  --text-lg:      1.125rem;  /* 18px — large input / lead */
+  --text-base:    0.9375rem; /* 15px — body, tables */
+  --text-sm:      0.8125rem; /* 13px — secondary, captions */
+  --text-xs:      0.6875rem; /* 11px — labels, eyebrows */
+
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semibold:600;
+  --weight-bold:    700;
+  --weight-extra:   900; /* Alegreya Sans Black */
+
+  --leading-tight: 1.15;
+  --leading-snug:  1.35;
+  --leading-normal:1.55;
+
+  --tracking-tight: -0.02em;
+  --tracking-eyebrow: 0.06em;  /* uppercase labels */
+}

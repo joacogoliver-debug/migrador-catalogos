@@ -2,3 +2,16 @@
 __pycache__/
 *.pyc
 *.xlsx
+
+# Resultado del empaquetado (se publica en los releases, no en el repo)
+dist/
+build/migrador/
+*.spec.bak
+
+# Config local de la app (incluye la clave de la API del usuario)
+.migrador-catalogos/
+
+# Harness temporales de desarrollo
+_dev_*.py
+_smoke*.py
+_ui_smoke.py

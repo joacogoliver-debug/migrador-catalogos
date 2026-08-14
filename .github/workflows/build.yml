@@ -1,0 +1,141 @@
+name: build
+
+# Compila la app para Windows, macOS y Linux.
+#
+# Se corre a mano o al publicar un tag vX.Y.Z. Los binarios se compilan acá, en
+# GitHub, desde el código público: cualquiera puede leer el log y verificar que
+# el ejecutable que descarga sale de este repo y no de la máquina de alguien.
+#
+# No se firma el binario (un certificado EV de Windows y la cuenta de Apple
+# cuestan plata, y el proyecto es gratis). En su lugar publicamos el SHA256 y
+# una atestación de procedencia, que es gratis y verificable con `gh attestation`.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write        # necesario para la atestación de procedencia
+  attestations: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            nombre: windows
+            artefacto: "Migrador de Catalogos.exe"
+          - os: macos-latest
+            nombre: macos
+            artefacto: "Migrador de Catalogos"
+          - os: ubuntu-latest
+            nombre: linux
+            artefacto: "Migrador de Catalogos"
+
+    runs-on: ${{ matrix.os }}
+    name: build (${{ matrix.nombre }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-app.txt
+          pip install pyinstaller
+
+      - name: Compilar
+        # build.py corre los tests antes de empaquetar y aborta si alguno falla.
+        run: python build/build.py
+
+      - name: Renombrar con la plataforma
+        shell: bash
+        run: |
+          cd dist
+          for f in *; do
+            case "$f" in
+              *.sha256) continue ;;
+            esac
+            base="${f%.exe}"
+            ext=""
+            [ "$f" != "$base" ] && ext=".exe"
+            mv "$f" "Migrador-de-Catalogos-${{ matrix.nombre }}${ext}"
+          done
+          rm -f *.sha256
+          ls -la
+
+      - name: Publicar hash
+        shell: bash
+        run: |
+          cd dist
+          for f in Migrador-de-Catalogos-*; do
+            if command -v sha256sum >/dev/null; then sha256sum "$f" | tee "$f.sha256";
+            else shasum -a 256 "$f" | tee "$f.sha256"; fi
+          done
+
+      - name: Atestación de procedencia
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: dist/Migrador-de-Catalogos-*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migrador-${{ matrix.nombre }}
+          path: dist/*
+          if-no-files-found: error
+
+  publicar:
+    # Sólo al empujar un tag: adjunta los binarios al release.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefactos
+
+      - name: Adjuntar al release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artefactos/**/*
+          generate_release_notes: true
+          body: |
+            ## Instalación
+
+            Bajá el archivo de tu sistema, descomprimí si hace falta y abrilo.
+
+            | Sistema | Archivo |
+            |---|---|
+            | Windows | `Migrador-de-Catalogos-windows.exe` |
+            | macOS | `Migrador-de-Catalogos-macos` |
+            | Linux | `Migrador-de-Catalogos-linux` |
+
+            La primera vez te va a pedir una clave de la YouTube Data API
+            (gratis, se saca en Google Cloud Console). Queda guardada en tu
+            máquina.
+
+            ### El sistema va a avisar que el programa "no es reconocido"
+
+            Es esperable: el binario no está firmado porque firmar cuesta plata y
+            esto es gratis. El código es público y el ejecutable se compila acá
+            en GitHub Actions desde ese código.
+
+            - **Windows**: "Más información" → "Ejecutar de todas formas".
+            - **macOS**: clic derecho → "Abrir", o Configuración → Privacidad y
+              seguridad → "Abrir de todos modos".
+
+            ### Verificar que el binario es el de este repo
+
+            Compará el SHA256 con el `.sha256` publicado, o usá la atestación:
+
+            ```
+            gh attestation verify Migrador-de-Catalogos-windows.exe --repo ${{ github.repository }}
+            ```

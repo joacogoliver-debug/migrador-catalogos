@@ -1,0 +1,7 @@
+/* MOJO — tipografías.
+   En la app de escritorio el import de Google Fonts puede fallar (sin internet,
+   o con la máquina detrás de un proxy). No es un problema: el stack de
+   var(--font-body) y var(--font-display) cae en system-ui / Segoe UI / SF, que
+   son tipografías modernas y bien kerneadas en las tres plataformas. La app se
+   ve correcta igual, sólo cambia la familia. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');

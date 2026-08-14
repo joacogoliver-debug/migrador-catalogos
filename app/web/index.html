@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Migrador de Catálogos · MOJO</title>
+<link rel="stylesheet" href="app.css" />
+<link rel="icon" href="assets/mojo-icon.png" />
+</head>
+<body>
+
+<div class="app">
+  <header class="header">
+    <div class="container header-inner">
+      <img src="assets/mojo-logo.png" alt="MOJO" />
+      <span class="header-sep"></span>
+      <span class="header-title">Migrador de Catálogos</span>
+      <div class="header-right">
+        <span class="header-version" id="version"></span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <nav class="stepper" id="stepper" aria-label="Progreso"></nav>
+      <div id="pantalla"></div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span>Hecho por <a href="https://mojo.com.ar" target="_blank" rel="noopener">Mojo Latam</a></span>
+      <span class="der" id="pie-estado"></span>
+    </div>
+  </footer>
+</div>
+
+<!-- Vanilla JS, sin frameworks ni CDN: la app tiene que funcionar sin internet
+     una vez abierta, y el empaquetado no debería depender de una descarga. -->
+<script src="app.js"></script>
+</body>
+</html>

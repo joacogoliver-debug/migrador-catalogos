@@ -48,6 +48,9 @@ jobs:
       - name: Run deliverable packaging test
         run: python test_paquete.py
 
+      - name: Run app backend test (jobs + HTTP server)
+        run: python test_app.py
+
       - name: Check modules import without the audio extras
         run: |
           python -c "import productos, portadas, audio, paquete; \

@@ -1,0 +1,44 @@
+:root {
+  /* ---- Brand ---- */
+  --mojo-yellow: #F5DA00;        /* primary accent, extracted from logo */
+  --mojo-yellow-hover: #E4CA00;  /* button hover */
+  --mojo-yellow-press: #CDB500;  /* button press */
+  --mojo-yellow-soft: #FEF8C9;   /* tint fill / highlight bg */
+  --mojo-black: #111316;         /* brand near-black (header, ink) */
+
+  /* ---- Neutrals ---- */
+  --neutral-0:  #FFFFFF;   /* page / card surface */
+  --neutral-50: #F7F8F9;   /* app background, zebra rows */
+  --neutral-100:#F0F1F3;   /* subtle fill */
+  --neutral-200:#E6E8EC;   /* borders, dividers */
+  --neutral-300:#D3D7DD;   /* strong border, input outline */
+  --neutral-400:#9AA0AA;   /* disabled text, placeholder */
+  --neutral-500:#6B7280;   /* muted / secondary text */
+  --neutral-700:#3A3F47;   /* body text */
+  --neutral-900:#111316;   /* headings, near-black */
+
+  /* ---- Semantic ---- */
+  --success:    #1B9E5A;
+  --success-soft:#E6F5EC;
+  --danger:     #DC2626;
+  --danger-soft:#FDECEC;
+  --info:       #2563EB;
+
+  /* ---- Aliases (use these in components) ---- */
+  --surface-page:    var(--neutral-50);
+  --surface-card:    var(--neutral-0);
+  --surface-subtle:  var(--neutral-100);
+  --surface-header:  var(--mojo-black);
+  --border-subtle:   var(--neutral-200);
+  --border-strong:   var(--neutral-300);
+  --text-heading:    var(--neutral-900);
+  --text-body:       var(--neutral-700);
+  --text-muted:      var(--neutral-500);
+  --text-placeholder:var(--neutral-400);
+  --text-on-accent:  var(--mojo-black);
+  --text-on-dark:    var(--neutral-0);
+  --accent:          var(--mojo-yellow);
+  --accent-hover:    var(--mojo-yellow-hover);
+  --accent-press:    var(--mojo-yellow-press);
+  --focus-ring:      rgba(245, 218, 0, 0.45);
+}

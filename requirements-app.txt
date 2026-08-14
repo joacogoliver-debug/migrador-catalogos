@@ -1,0 +1,13 @@
+# Dependencias de la app de escritorio. Son dos.
+#
+# El backend usa http.server de la biblioteca estándar a propósito, y el
+# frontend es JavaScript sin frameworks: así el ejecutable queda chico y el
+# empaquetado no depende de imports dinámicos que PyInstaller no ve.
+
+# Generar los Excel del entregable.
+openpyxl>=3.1
+
+# Ventana nativa. Es OPCIONAL: si no está, la app abre en el navegador por
+# defecto y funciona igual. Se incluye acá porque hace que se sienta un programa
+# de escritorio en vez de una pestaña.
+pywebview>=5.0 ; sys_platform != "linux"
