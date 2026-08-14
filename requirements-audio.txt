@@ -1,0 +1,21 @@
+# Dependencias OPCIONALES del módulo de audio. No hacen falta para usar la
+# herramienta: el relevamiento, la planilla, la validación, la hoja de ingesta y
+# las portadas funcionan sólo con requirements.txt.
+#
+# Estas se instalan aparte, a criterio de cada usuario y en su propia máquina:
+#
+#     pip install -r requirements-audio.txt
+#
+# Además hace falta ffmpeg en el PATH (no es un paquete de pip):
+#     https://ffmpeg.org/download.html
+#
+# La app detecta con `audio.verificar_entorno()` qué hay disponible y no ofrece
+# opciones que no puedan funcionar. El despliegue público NO instala esto y
+# arranca con el módulo de audio apagado (ver MIGRADOR_AUDIO en el README).
+
+# Descarga desde Tidal en FLAC lossless. Requiere que el usuario conecte su
+# propia cuenta paga; no se comparte una cuenta entre usuarios.
+tiddl>=3.4.1
+
+# Descarga del audio de referencia (lossy) de YouTube.
+yt-dlp>=2024.1.0

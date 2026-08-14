@@ -39,6 +39,12 @@ jobs:
       - name: Run product grouping + filters test
         run: python test_productos.py
 
+      - name: Run pre-delivery validation test
+        run: python test_validar.py
+
+      - name: Run artwork resolution test
+        run: python test_portadas.py
+
       - name: Run deliverable packaging test
         run: python test_paquete.py
 

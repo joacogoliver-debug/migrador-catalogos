@@ -29,6 +29,10 @@ USER_AGENT = "RelevarCatalogo/2.0 (migrador de catalogo)"
 PORTADAS_WORKERS = 4
 RESOLUCIONES = (3000, 2000, 1200)
 
+# Piso de ingesta de las tiendas (Spotify/Apple). Por debajo de esto la portada
+# se rechaza, así que conviene avisarlo fuerte y no sólo en el validador.
+COVER_MIN_INGESTA = 1400
+
 # Umbral de similitud título-a-título para aceptar un match. Por debajo de esto
 # preferimos no traer portada antes que traer la portada de otro disco.
 MIN_RATIO = 0.62
@@ -127,8 +131,16 @@ def buscar_portada(artista, album, upc=""):
 
 
 def descargar_portada(url100):
-    """Baja la portada en la resolución más alta disponible.
-    Devuelve (bytes, px) o (None, 0)."""
+    """Baja la portada y devuelve (bytes, px_real) o (None, 0).
+
+    `px_real` es el lado MEDIDO de la imagen, no el que pedimos: Apple sirve el
+    tamaño máximo que tiene para ese release y lo devuelve con HTTP 200 aunque
+    sea más chico que el pedido (pedir 3000x3000 puede devolver 1500x1500). Si
+    reportáramos el tamaño pedido, la planilla diría que la portada cumple el
+    mínimo de ingesta cuando en realidad no lo cumple.
+    """
+    from validar import medir_imagen
+
     for px in RESOLUCIONES:
         url = _upscale(url100, px)
         if not url:
@@ -137,12 +149,15 @@ def descargar_portada(url100):
             req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=30) as r:
                 data = r.read()
-            # Apple devuelve un JPG chico en lugar de 404 cuando no tiene el
-            # tamaño: si pesa muy poco, probamos la resolución siguiente.
-            if data and len(data) > 10_000:
-                return data, px
         except Exception:
             continue
+        if not data:
+            continue
+        medida = medir_imagen(data)
+        if medida:
+            # Lo que efectivamente llegó, medido en la cabecera del archivo.
+            return data, min(medida[0], medida[1])
+        # Ilegible: probamos la resolución siguiente antes de darla por perdida.
     return None, 0
 
 
@@ -161,10 +176,17 @@ def fetch_portadas(productos, artista, log=print):
         data, px = descargar_portada(info["url100"])
         p["cover_bytes"], p["cover_px"] = data, px
         p["cover_match"] = info["match"]
-        if data:
-            p["cover_status"] = f"ok {px}x{px} (match {info['match']})"
-        else:
+        if not data:
             p["cover_status"] = "match encontrado pero falló la descarga"
+        elif px < COVER_MIN_INGESTA:
+            # Se avisa acá además de en el validador: es la diferencia entre una
+            # portada usable y una que la distribuidora rechaza.
+            p["cover_status"] = (f"{px}x{px} — DEBAJO DEL MINIMO de ingesta "
+                                 f"({COVER_MIN_INGESTA}x{COVER_MIN_INGESTA})")
+        elif px < RESOLUCIONES[0]:
+            p["cover_status"] = f"ok {px}x{px} (Apple no tiene mas resolucion)"
+        else:
+            p["cover_status"] = f"ok {px}x{px} (match {info['match']})"
         return p
 
     with ThreadPoolExecutor(max_workers=PORTADAS_WORKERS) as ex:

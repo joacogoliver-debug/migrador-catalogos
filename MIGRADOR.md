@@ -1,4 +1,9 @@
-# Migrador de catálogos
+# Migrador de catálogos — notas internas
+
+> Para la documentación pública (qué hace, cómo correrlo, privacidad) ver
+> [README.md](README.md). Este archivo guarda las decisiones de diseño y el
+> detalle técnico.
+
 
 Herramienta para migrar el catálogo de un artista de una distribuidora a otra.
 Se construye sobre el relevador existente (`relevar_core.py`) y agrega

@@ -21,6 +21,13 @@ import audio as A
 import migrar_core as M
 import productos as P
 import relevar_core as R
+import validar as V
+
+# El módulo de audio viene APAGADO por defecto. Se prende con MIGRADOR_AUDIO=1,
+# y aun así sólo aparece si el entorno lo soporta (ver audio.verificar_entorno).
+# El despliegue público lo deja apagado a propósito: la herramienta entrega
+# planilla, validación, hoja de ingesta y portadas sin depender de nada extra.
+AUDIO_HABILITADO = os.environ.get("MIGRADOR_AUDIO", "").strip() in ("1", "true", "si", "sí")
 
 st.set_page_config(page_title="Migrador de Catálogos · Mojo", page_icon="📦", layout="wide")
 
@@ -61,6 +68,10 @@ h3 { font-weight:700; margin-top:.2rem; }
 }
 .ok-lossless {
   background:#F0FDF4; border-left:4px solid #16A34A; padding:12px 16px;
+  border-radius:8px; font-size:.92rem; margin:.6rem 0;
+}
+.aviso-error {
+  background:#FEF2F2; border-left:4px solid #DC2626; padding:12px 16px;
   border-radius:8px; font-size:.92rem; margin:.6rem 0;
 }
 </style>
@@ -289,11 +300,17 @@ def paso_3(seleccion, artista):
     paso(3, "Elegí qué querés descargar")
     entorno = A.verificar_entorno()
 
-    c1, c2, c3 = st.columns(3)
-    quiere_planilla = c1.checkbox("📄 Planilla con datos y códigos", value=True)
+    if AUDIO_HABILITADO:
+        c1, c2, c3 = st.columns(3)
+    else:
+        c1, c2 = st.columns(2)
+        c3 = None
+    quiere_planilla = c1.checkbox("📄 Planilla, validación y hoja de ingesta", value=True)
     quiere_portadas = c2.checkbox("🖼️ Portadas", value=True,
-                                  help="Hasta 3000x3000 desde Apple Music.")
-    quiere_audio = c3.checkbox("🎵 Audios", value=False)
+                                  help="La resolución más alta que tenga Apple Music. "
+                                       "La validación avisa si queda por debajo del "
+                                       "mínimo de ingesta (1400x1400).")
+    quiere_audio = c3.checkbox("🎵 Audios", value=False) if c3 is not None else False
 
     ses = None
     if quiere_audio:
@@ -377,6 +394,40 @@ def paso_4(seleccion, artista, quiere_planilla, quiere_portadas, quiere_audio,
         _render_descarga(artista)
 
 
+def _render_validacion(seleccion, artista):
+    """Muestra la validación pre-entrega: es lo que evita un rechazo, así que va
+    antes del botón de descarga y no escondido dentro del ZIP."""
+    res = V.validar(seleccion, artista)
+    r = res["resumen"]
+
+    if res["apto"] and not res["avisos"]:
+        st.markdown('<div class="ok-lossless">✅ <b>Validación sin observaciones.</b> '
+                    'No encontré nada que las distribuidoras suelan rechazar.</div>',
+                    unsafe_allow_html=True)
+        return
+
+    if res["errores"]:
+        st.markdown(
+            f'<div class="aviso-error">⛔ <b>{r["errores"]} errores que suelen causar '
+            'rechazo.</b> Conviene corregirlos antes de entregar — el detalle está '
+            'abajo y también en <code>_Validacion pre-entrega.txt</code>.</div>',
+            unsafe_allow_html=True)
+    else:
+        st.markdown(
+            f'<div class="ok-lossless">✅ <b>Sin errores de rechazo.</b> '
+            f'Hay {r["avisos"]} avisos para revisar.</div>', unsafe_allow_html=True)
+
+    for nivel, etiqueta, abierto in (("error", "Errores", True), ("aviso", "Avisos", False)):
+        grupo = [h for h in res["hallazgos"] if h["nivel"] == nivel]
+        if not grupo:
+            continue
+        with st.expander(f"{etiqueta} ({len(grupo)})", expanded=abierto):
+            st.dataframe(
+                [{"Producto": h["producto"], "Track": h["track"] or "—",
+                  "Qué pasa": h["mensaje"]} for h in grupo],
+                hide_index=True, width="stretch")
+
+
 def _render_descarga(artista):
     ruta = st.session_state["zip_path"]
     tam = st.session_state.get("zip_bytes", 0)
@@ -395,8 +446,11 @@ def _render_descarga(artista):
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Portadas", f"{sum(1 for p in sel if p.get('cover_bytes'))}/{len(sel)}")
-    c2.metric("Audio apto entrega", fmt(len(aptos)))
-    c3.metric("Sólo referencia", fmt(len(ref)))
+    if AUDIO_HABILITADO:
+        c2.metric("Audio apto entrega", fmt(len(aptos)))
+        c3.metric("Sólo referencia", fmt(len(ref)))
+
+    _render_validacion(sel, artista)
 
     if ref:
         st.markdown(

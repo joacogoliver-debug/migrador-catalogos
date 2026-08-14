@@ -139,6 +139,82 @@ def planilla_maestra_bytes(productos, artista):
     return buf.getvalue()
 
 
+# ============================================================
+# Hoja de ingesta — CSV para cargar en la distribuidora nueva
+# ============================================================
+#
+# Las distribuidoras ingestan por planilla propia o por DDEX ERN. DDEX quedó
+# afuera a propósito: emitir ERN válido requiere ser parte registrada de DDEX con
+# un DPID propio, así que un XML "casi DDEX" sería peor que no darlo (se rechaza
+# igual y da falsa sensación de que está listo). En su lugar damos un CSV con las
+# columnas estándar que aceptan o mapean casi todas, y marcamos explícitamente lo
+# que sólo puede completar el dueño del catálogo.
+
+MARCA_COMPLETAR = "<<COMPLETAR>>"
+
+COLUMNAS_INGESTA = [
+    # --- nivel release ---
+    "UPC", "Release Title", "Release Artist", "Release Type", "Release Date",
+    "Label", "P Line", "C Line", "Genre", "Language", "Territories",
+    # --- nivel track ---
+    "Disc Number", "Track Number", "ISRC", "Track Title", "Track Artist",
+    "Duration", "Explicit", "Composer", "Publisher", "Lyrics Language",
+    # --- referencia interna ---
+    "Audio File", "Cover File", "Source Quality", "YouTube URL",
+]
+
+
+def hoja_ingesta_csv(productos, artista):
+    """CSV con las columnas estándar de ingesta, una fila por track.
+
+    Lo que sabemos va completo; lo que no puede salir de YouTube ni de las APIs
+    públicas (género, explicit, compositores, editoriales) queda marcado con
+    <<COMPLETAR>> en vez de vacío o inventado, así se ve de una qué falta.
+    """
+    import csv
+    from io import StringIO
+
+    buf = StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(COLUMNAS_INGESTA)
+
+    for p in productos:
+        anio = p.get("release_year") or ""
+        sello = p.get("label") or MARCA_COMPLETAR
+        # La línea ℗ se arma con lo que trae YouTube; si falta el año no la
+        # inventamos.
+        p_line = f"{anio} {sello}".strip() if anio and p.get("label") else MARCA_COMPLETAR
+        for t in p["tracks"]:
+            w.writerow([
+                p.get("upc") or MARCA_COMPLETAR,
+                p.get("title", ""),
+                artista,
+                p.get("kind", ""),
+                p.get("release_date") or (f"{anio}-01-01" if anio else MARCA_COMPLETAR),
+                sello,
+                p_line,
+                MARCA_COMPLETAR,            # C Line: no sale de YouTube
+                MARCA_COMPLETAR,            # Genre
+                MARCA_COMPLETAR,            # Language
+                "Worldwide",
+                t.get("tidal", {}).get("volume_number") if t.get("tidal") else 1,
+                t.get("track_number") or "",
+                t.get("isrc") or MARCA_COMPLETAR,
+                t.get("track", ""),
+                artista,
+                _mmss(t.get("duration_s")),
+                MARCA_COMPLETAR,            # Explicit
+                MARCA_COMPLETAR,            # Composer
+                MARCA_COMPLETAR,            # Publisher
+                MARCA_COMPLETAR,            # Lyrics Language
+                os.path.basename(t["audio_path"]) if t.get("audio_path") else "",
+                "portada.jpg" if p.get("cover_bytes") else "",
+                _fuente_corta(t),
+                t.get("url", ""),
+            ])
+    return buf.getvalue()
+
+
 def planilla_producto_bytes(p, artista):
     """Excel de un solo producto, para que viaje dentro de su carpeta."""
     from io import BytesIO
@@ -246,8 +322,32 @@ Una carpeta por producto (álbum / EP / single). Cada una trae:
 
 En la raíz:
 
-  _Catalogo completo.xlsx   Todos los productos en una sola planilla.
-  _Reporte de migracion.txt Qué se pudo obtener y qué quedó pendiente.
+  _Catalogo completo.xlsx      Todos los productos en una sola planilla.
+  _Hoja de ingesta.csv         El archivo para cargar en la distribuidora nueva.
+  _Validacion pre-entrega.txt  Qué va a ser rechazado y qué conviene revisar.
+  _Reporte de migracion.txt    Qué se pudo obtener y qué quedó pendiente.
+
+EMPEZÁ POR LA VALIDACIÓN
+------------------------
+Abrí primero "_Validacion pre-entrega.txt". Separa dos cosas:
+
+  ERRORES  La distribuidora los rechaza (código con formato inválido, dígito
+           verificador mal, código duplicado, portada chica o no cuadrada).
+           Hay que corregirlos antes de entregar.
+
+  AVISOS   Pasan la ingesta pero conviene revisarlos (falta un ISRC o un UPC y
+           se va a asignar uno nuevo, un título arrastra texto de YouTube).
+
+SOBRE LA HOJA DE INGESTA
+------------------------
+"_Hoja de ingesta.csv" trae las columnas estándar que aceptan o mapean casi
+todas las distribuidoras. Lo que se pudo relevar viene completo. Lo que no puede
+salir de fuentes públicas está marcado con <<COMPLETAR>>:
+
+  Genre, Language, Explicit, Composer, Publisher, C Line
+
+Esos campos los tiene que llenar el dueño del catálogo — están marcados en vez
+de vacíos o inventados justamente para que no pasen desapercibidos.
 
 SOBRE LA CALIDAD DEL AUDIO — LEER ANTES DE ENTREGAR
 ---------------------------------------------------
@@ -299,9 +399,19 @@ def build_zip(productos, artista, out_path, entorno=None, con_tidal=False,
         z.writestr(f"{raiz}/_LEEME.txt", LEEME.encode("utf-8-sig"))
         z.writestr(f"{raiz}/_Reporte de migracion.txt",
                    reporte_texto(productos, artista, entorno, con_tidal).encode("utf-8-sig"))
+
+        # La validación va siempre: es lo que evita que la entrega se rechace.
+        import validar as V
+        res_val = V.validar(productos, artista)
+        z.writestr(f"{raiz}/_Validacion pre-entrega.txt",
+                   V.reporte_validacion(res_val, artista).encode("utf-8-sig"))
+
         if incluir_planilla:
             z.writestr(f"{raiz}/_Catalogo completo.xlsx",
                        planilla_maestra_bytes(productos, artista))
+            # CSV de ingesta: es el archivo que se carga en la distribuidora.
+            z.writestr(f"{raiz}/_Hoja de ingesta.csv",
+                       hoja_ingesta_csv(productos, artista).encode("utf-8-sig"))
 
         for p in productos:
             carpeta = f"{raiz}/{p['folder']}"
