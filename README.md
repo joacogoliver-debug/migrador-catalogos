@@ -8,13 +8,13 @@ ser rechazado antes de que lo mandes.
 
 Hecha por [Mojo Latam](https://mojo.com.ar). Código abierto y sin costo.
 
-![tests](https://github.com/OWNER/REPO/actions/workflows/tests.yml/badge.svg)
+![tests](https://github.com/joacogoliver-debug/migrador-catalogos/actions/workflows/tests.yml/badge.svg)
 
 ---
 
 ## Descargar
 
-Bajá el archivo de tu sistema desde [Releases](https://github.com/OWNER/REPO/releases)
+Bajá el archivo de tu sistema desde [Releases](https://github.com/joacogoliver-debug/migrador-catalogos/releases)
 y abrilo. No hay instalador ni dependencias.
 
 | Sistema | Archivo |
@@ -39,7 +39,7 @@ código a la vista de todos, y cada release publica el SHA256 más una atestaci�
 de procedencia. Podés verificar que el binario salió de este repo:
 
 ```bash
-gh attestation verify Migrador-de-Catalogos-windows.exe --repo OWNER/REPO
+gh attestation verify Migrador-de-Catalogos-windows.exe --repo joacogoliver-debug/migrador-catalogos
 ```
 
 Es la misma postura que usa `yt-dlp`.
