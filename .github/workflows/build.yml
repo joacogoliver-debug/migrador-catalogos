@@ -81,8 +81,16 @@ jobs:
             else shasum -a 256 "$f" | tee "$f.sha256"; fi
           done
 
+      # Sólo corre en repos públicos: GitHub no permite atestaciones en repos
+      # privados de cuentas personales ("Feature not available for user-owned
+      # private repositories"). Mientras el repo sea privado se saltea y el
+      # release igual sale con su SHA256; al pasarlo a público se activa solo.
+      # continue-on-error además evita que un cambio de GitHub en esto bloquee
+      # una publicación: la atestación es un extra, no el entregable.
       - name: Atestación de procedencia
-        uses: actions/attest-build-provenance@v1
+        if: ${{ github.event.repository.private == false }}
+        continue-on-error: true
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: dist/Migrador-de-Catalogos-*
 

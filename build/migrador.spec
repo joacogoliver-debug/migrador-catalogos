@@ -30,6 +30,10 @@ import os
 RAIZ = os.path.abspath(os.getcwd())
 APP = os.path.join(RAIZ, "app")
 
+# Si por algo faltara el .ico, se compila sin icono en vez de abortar el build.
+_ico = os.path.join(APP, "web", "assets", "mojo-icon.ico")
+ICONO = _ico if os.path.exists(_ico) else None
+
 a = Analysis(
     [os.path.join(APP, "launcher.py")],
     pathex=[RAIZ, APP],
@@ -93,5 +97,8 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(APP, "web", "assets", "mojo-icon.png"),
+    # .ico y no .png: en Windows PyInstaller sólo acepta exe/ico, y sin Pillow
+    # instalado no convierte solo (compilaba en una máquina con Pillow y fallaba
+    # en el CI, que no lo tiene). El .ico está commiteado para no depender de eso.
+    icon=ICONO,
 )

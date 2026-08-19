@@ -2,13 +2,19 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "migrador",
+      "name": "app",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["app/launcher.py", "--puerto", "8600", "--no-abrir"],
+      "port": 8600
+    },
+    {
+      "name": "migrador-streamlit",
       "runtimeExecutable": "streamlit",
       "runtimeArgs": ["run", "app_migrar.py", "--server.port", "8502", "--server.headless", "true"],
       "port": 8502
     },
     {
-      "name": "relevador",
+      "name": "relevador-streamlit",
       "runtimeExecutable": "streamlit",
       "runtimeArgs": ["run", "app.py", "--server.port", "8501", "--server.headless", "true"],
       "port": 8501
