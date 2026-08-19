@@ -39,7 +39,10 @@ def main():
     # --- La forma REAL que devuelve relevar_core.relevar() -----------------
     # Si algún día cambia, este test se rompe y avisa: es justamente el punto.
     CLAVES_REALES = {"artist", "channel_title", "tracks", "distribs",
-                     "total_views", "units", "codes"}
+                     "total_views", "units", "codes",
+                     # diagnostico del canal: sin esto la app no puede avisar
+                     # que el canal no trae metadata
+                     "es_topic", "cobertura_metadata", "topic_sugerido"}
 
     import inspect
     fuente = inspect.getsource(relevar_core.relevar)
@@ -63,6 +66,8 @@ def main():
 
     llamadas = {}
 
+    escenario = {"topic": True}
+
     def relevar_doble(url, yt_key, with_codes=True, progress=None, use_musicbrainz=False):
         llamadas["url"] = url
         llamadas["yt_key"] = yt_key
@@ -70,21 +75,42 @@ def main():
         if progress:
             progress("probando el callback", 0.5)
         # EXACTAMENTE la forma real, incluidas todas las claves.
+        if escenario["topic"]:
+            return {
+                "artist": "Artista Doble",
+                "channel_title": "Artista Doble - Topic",
+                "tracks": tracks_falsos,
+                "distribs": {"ONErpm": {"videos": 3, "views": 300}},
+                "total_views": 300,
+                "units": 3,
+                "codes": {"isrc": 3, "upc": 2, "matched": 3, "source": "Deezer"},
+                "es_topic": True,
+                "cobertura_metadata": 1.0,
+                "topic_sugerido": None,
+            }
+        # Canal comun: sin metadata y con el Topic sugerido.
+        sin_datos = [dict(t, distributor="(sin datos)", album="(single / sin álbum)",
+                          release_year="", label="", isrc="", upc="")
+                     for t in tracks_falsos]
         return {
             "artist": "Artista Doble",
-            "channel_title": "Artista Doble - Topic",
-            "tracks": tracks_falsos,
-            "distribs": {"ONErpm": {"videos": 3, "views": 300}},
+            "channel_title": "Artista Doble",
+            "tracks": sin_datos,
+            "distribs": {},
             "total_views": 300,
             "units": 3,
-            "codes": {"isrc": 3, "upc": 2, "matched": 3, "source": "Deezer"},
+            "codes": None,
+            "es_topic": False,
+            "cobertura_metadata": 0.0,
+            "topic_sugerido": {"id": "UCxxx", "titulo": "Artista Doble - Topic",
+                               "url": "https://www.youtube.com/channel/UCxxx"},
         }
 
     original = relevar_core.relevar
     relevar_core.relevar = relevar_doble
     try:
         avances = []
-        prods, artista, tracks = M.relevar_catalogo(
+        prods, artista, tracks, diag = M.relevar_catalogo(
             "https://www.youtube.com/@Test", "clave-falsa",
             progress=lambda m, f=None: avances.append(m))
 
@@ -109,6 +135,29 @@ def main():
               f"avances={avances}")
         check("relevar_catalogo.loguea_productos",
               any("productos" in a for a in avances), f"avances={avances}")
+
+        # --- diagnostico del canal (caso Topic: todo bien) ---------------
+        expect("diag.es_topic", diag["es_topic"], True)
+        expect("diag.cobertura", diag["cobertura_metadata"], 1.0)
+        expect("diag.sin_sugerencia", diag["topic_sugerido"], None)
+
+        # --- diagnostico del canal (caso canal comun: hay que avisar) ----
+        escenario["topic"] = False
+        avisos2 = []
+        prods2, _a2, _t2, diag2 = M.relevar_catalogo(
+            "https://www.youtube.com/@Test", "clave-falsa",
+            progress=lambda m, f=None: avisos2.append(m))
+        expect("diag2.no_es_topic", diag2["es_topic"], False)
+        expect("diag2.cobertura_cero", diag2["cobertura_metadata"], 0.0)
+        check("diag2.sugiere_topic",
+              (diag2["topic_sugerido"] or {}).get("titulo") == "Artista Doble - Topic",
+              f"{diag2['topic_sugerido']}")
+        check("diag2.loguea_el_aviso", any("no trae metadata" in a for a in avisos2),
+              f"avisos={avisos2}")
+        # Sin álbumes declarados, cada track queda como su propio producto: es el
+        # sintoma que ve el usuario (N productos = N tracks).
+        expect("diag2.un_producto_por_track", len(prods2), len(tracks_falsos))
+        escenario["topic"] = True
 
         # --- opciones_de_filtro sobre lo relevado ------------------------
         op = M.opciones_de_filtro(prods)

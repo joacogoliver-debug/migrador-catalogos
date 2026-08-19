@@ -92,6 +92,43 @@ def resolve_channel(url, key):
     )
 
 
+RE_TOPIC = re.compile(r"\s*-\s*Topic$", re.I)
+
+# Por debajo de esta proporción de tracks con distribuidora, damos por hecho que
+# el canal no tiene descripciones auto-generadas y no se puede sacar metadata.
+UMBRAL_METADATA = 0.30
+
+
+def buscar_canal_topic(artista, key):
+    """Busca el canal "<artista> - Topic". Devuelve (channel_id, titulo) o None.
+
+    Cuesta 100 unidades de cuota (search.list), bastante más que relevar un
+    catálogo entero, así que se llama SÓLO cuando ya sabemos que el canal que
+    pidió el usuario no tiene metadata: ahí el gasto se justifica porque es la
+    diferencia entre un resultado inútil y uno completo.
+    """
+    objetivo = _normalize(RE_TOPIC.sub("", artista or "").strip())
+    if not objetivo:
+        return None
+    try:
+        data = api_get("search", {"part": "snippet", "q": f"{artista} - Topic",
+                                  "type": "channel", "maxResults": 10}, key)
+    except Exception:
+        return None
+
+    for it in data.get("items") or []:
+        sn = it.get("snippet") or {}
+        titulo = sn.get("channelTitle") or sn.get("title") or ""
+        if not RE_TOPIC.search(titulo):
+            continue
+        # El nombre tiene que coincidir, sin acentos: "Román" vs "Roman".
+        if _normalize(RE_TOPIC.sub("", titulo).strip()) == objetivo:
+            cid = (sn.get("channelId") or (it.get("id") or {}).get("channelId"))
+            if cid:
+                return cid, titulo
+    return None
+
+
 def list_video_ids(uploads_playlist, key):
     ids = []
     page = None
@@ -658,7 +695,23 @@ def relevar(url, yt_key, with_codes=True, progress=None, use_musicbrainz=False):
     videos = fetch_videos(vids, yt_key)
     tracks = build_tracks(videos)
 
-    artist = re.sub(r"\s*-\s*Topic$", "", title).strip()
+    artist = RE_TOPIC.sub("", title).strip()
+
+    # ¿El canal tiene descripciones auto-generadas? Sin ellas no hay
+    # distribuidora, ni álbum, ni año, ni sello, y el matcheo de códigos casi no
+    # engancha porque los títulos traen ruido ("(Video Oficial)") y las
+    # duraciones incluyen intros de video. Conviene detectarlo y decirlo, en vez
+    # de devolver un catálogo vacío de datos como si estuviera todo bien.
+    con_dist = sum(1 for t in tracks if t["distributor"] != "(sin datos)")
+    cobertura = con_dist / len(tracks) if tracks else 0.0
+    es_topic = bool(RE_TOPIC.search(title))
+    topic_sugerido = None
+    if cobertura < UMBRAL_METADATA and not es_topic:
+        step("El canal no trae metadata; buscando el canal Topic…", 0.45)
+        hallado = buscar_canal_topic(artist, yt_key)
+        if hallado:
+            topic_sugerido = {"id": hallado[0], "titulo": hallado[1],
+                              "url": f"https://www.youtube.com/channel/{hallado[0]}"}
 
     codes_stats = None
     if with_codes:
@@ -676,4 +729,7 @@ def relevar(url, yt_key, with_codes=True, progress=None, use_musicbrainz=False):
         "total_views": sum(t["views"] for t in tracks),
         "units": units,
         "codes": codes_stats,
+        "es_topic": es_topic,
+        "cobertura_metadata": round(cobertura, 3),
+        "topic_sugerido": topic_sugerido,
     }

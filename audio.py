@@ -55,6 +55,20 @@ def _existe(cmd):
     return shutil.which(cmd) is not None
 
 
+def _runtime_js():
+    """Runtime de JavaScript para yt-dlp, o None.
+
+    YouTube exige resolver un desafío en JavaScript para armar las URLs de
+    descarga. Sin un runtime, yt-dlp avisa que la extracción está deprecada, cae
+    a un cliente alternativo y las URLs devuelven 403. Deno es el único que
+    habilita solo; si hay Node lo pasamos explícitamente.
+    """
+    for nombre in ("deno", "node", "bun"):
+        if _existe(nombre):
+            return nombre
+    return None
+
+
 def verificar_entorno():
     """Qué capacidades están disponibles en esta máquina.
 
@@ -77,6 +91,7 @@ def verificar_entorno():
     return {
         "ffmpeg": ffmpeg,
         "ffprobe": _existe("ffprobe"),
+        "js_runtime": _runtime_js(),
         "tiddl": tiene_tiddl,
         "yt_dlp": tiene_ytdlp,
         # FLAC necesita las dos cosas: tiddl para bajar y ffmpeg para extraer.
@@ -366,8 +381,20 @@ def bajar_flac(session, track_id, dest_dir, calidad="LOSSLESS"):
 # Descarga NIVEL B — YouTube (referencia lossy)
 # ============================================================
 
-def bajar_referencia_youtube(video_id, dest_dir, log=print):
+def _falla(motivo, video_id, log, errores):
+    """Registra el motivo del fallo y devuelve la terna vacía."""
+    log(f"[yt] {video_id}: {motivo}")
+    if errores is not None:
+        errores.append(motivo)
+    return None, None, None
+
+
+def bajar_referencia_youtube(video_id, dest_dir, log=print, errores=None):
     """Baja el mejor audio disponible de YouTube, SIN recomprimir.
+
+    Si `errores` es una lista, se le agrega el motivo del fallo. Sin eso el
+    usuario ve "sin audio" y no tiene forma de saber si el video se borró, si es
+    privado o si hay un problema de red.
 
     No convertimos a WAV a propósito: la fuente ya es lossy, así que pasarla a
     WAV multiplicaría el peso por ~50 sin recuperar nada. Guardamos el stream
@@ -375,27 +402,30 @@ def bajar_referencia_youtube(video_id, dest_dir, log=print):
     """
     from pathlib import Path
     salida = Path(dest_dir) / f"yt_{video_id}.%(ext)s"
-    cmd = [
-        "yt-dlp", "-f", "bestaudio",
-        "--no-playlist", "--quiet", "--no-warnings",
-        "-o", str(salida),
-        f"https://www.youtube.com/watch?v={video_id}",
-    ]
+    cmd = ["yt-dlp", "-f", "bestaudio", "--no-playlist", "--quiet", "--no-warnings"]
+    js = _runtime_js()
+    if js:
+        # Sin runtime de JS, YouTube deprecó la extracción y las URLs dan 403.
+        cmd += ["--js-runtimes", js]
+    cmd += ["-o", str(salida), f"https://www.youtube.com/watch?v={video_id}"]
     try:
         subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=True)
     except FileNotFoundError:
-        log("[yt] yt-dlp no está instalado")
-        return None, None, None
+        return _falla("yt-dlp no está instalado", video_id, log, errores)
     except subprocess.CalledProcessError as e:
-        log(f"[yt] falló {video_id}: {(e.stderr or '').strip()[:120]}")
-        return None, None, None
+        # yt-dlp explica el motivo real en stderr ("Video unavailable", "Private
+        # video", "Sign in to confirm your age"...). Es justo lo que el usuario
+        # necesita saber para decidir qué hacer con ese track.
+        crudo = (e.stderr or "").strip().splitlines()
+        motivo = next((l.replace("ERROR:", "").strip() for l in reversed(crudo)
+                       if "ERROR" in l.upper()), crudo[-1] if crudo else "falló la descarga")
+        return _falla(motivo[:160], video_id, log, errores)
     except subprocess.TimeoutExpired:
-        log(f"[yt] timeout en {video_id}")
-        return None, None, None
+        return _falla("tardó demasiado y se canceló", video_id, log, errores)
 
     for f in Path(dest_dir).glob(f"yt_{video_id}.*"):
         return f, ETIQUETA_YOUTUBE, f.suffix.lower()
-    return None, None, None
+    return _falla("yt-dlp terminó pero no dejó ningún archivo", video_id, log, errores)
 
 
 # ============================================================
@@ -446,16 +476,21 @@ def fetch_audio(productos, session=None, usar_referencia=True, dest_dir=None,
     pendientes = (sin_tidal + fallidos) if usar_referencia else []
 
     def _yt(t):
-        ruta, etiqueta, fmt = bajar_referencia_youtube(t.get("video_id"), dest_dir, log=lambda *_: None)
+        errs = []
+        ruta, etiqueta, fmt = bajar_referencia_youtube(
+            t.get("video_id"), dest_dir, log=lambda *_: None, errores=errs)
         if ruta:
             t["audio_path"], t["audio_label"], t["audio_format"] = str(ruta), etiqueta, fmt
+        elif errs:
+            # Antes esto se descartaba y el usuario veía "sin audio" sin motivo.
+            t["audio_error"] = errs[-1]
         return t
 
     if pendientes:
         log(f"[audio] {len(pendientes)} tracks por YouTube (referencia lossy)")
         with ThreadPoolExecutor(max_workers=YT_WORKERS) as ex:
             for i, t in enumerate(ex.map(_yt, pendientes), 1):
-                estado = t.get("audio_format") or "sin audio"
+                estado = t.get("audio_format") or f"SIN AUDIO ({t.get('audio_error', 'motivo desconocido')})"
                 log(f"[audio] yt {i}/{len(pendientes)} {t['track'][:40]} -> {estado}")
 
     aptos = sum(1 for t in tracks if (t.get("audio_format") or "") in FORMATOS_LOSSLESS)

@@ -284,6 +284,11 @@ def reporte_texto(productos, artista, entorno=None, con_tidal=False):
         sin = [t for t in p["tracks"] if not t.get("audio_path")]
         if sin:
             faltas.append(f"{len(sin)}/{p['track_count']} tracks sin audio")
+            # El motivo concreto por track: sirve para saber si hay que buscar
+            # otra fuente o si el video simplemente ya no está.
+            for t in sin:
+                if t.get("audio_error"):
+                    faltas.append(f"    · {t.get('track', '')[:40]}: {t['audio_error']}")
         lossy = [t for t in p["tracks"]
                  if t.get("audio_path") and (t.get("audio_format") or "") not in FORMATOS_LOSSLESS]
         if lossy:

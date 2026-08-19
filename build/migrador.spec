@@ -34,6 +34,31 @@ APP = os.path.join(RAIZ, "app")
 _ico = os.path.join(APP, "web", "assets", "mojo-icon.ico")
 ICONO = _ico if os.path.exists(_ico) else None
 
+# Build CON el módulo de audio adentro: `python build/build.py --con-audio`.
+# Es para uso propio, no para el binario que se publica. Suma unos 14 MB y mete
+# un descargador de audio dentro del ejecutable, que es justo lo que el build
+# público evita. Igual necesita ffmpeg en el PATH: es un binario del sistema y no
+# se empaqueta.
+CON_AUDIO = os.environ.get("MIGRADOR_BUILD_AUDIO", "") == "1"
+
+# La variante con audio deja este archivo adentro del ejecutable. El servidor lo
+# busca para prender el módulo sin depender de una variable de entorno: en un
+# binario que se abre con doble clic no hay forma de pasarla, y pedirle al usuario
+# que abra una consola para usar la funcion principal de su propio build no tiene
+# sentido.
+_MARCA_AUDIO = os.path.join(RAIZ, "build", "CON_AUDIO")
+if CON_AUDIO and not os.path.exists(_MARCA_AUDIO):
+    with open(_MARCA_AUDIO, "w", encoding="utf-8") as _f:
+        _f.write("Este build incluye el modulo de audio (Tidal + referencia).")
+
+# Estas se excluyen sólo en el build público.
+DEPS_AUDIO = [
+    "yt_dlp", "tiddl",
+    "requests", "requests_cache", "urllib3", "websockets",
+    "mutagen", "brotli", "curl_cffi", "Cryptodome", "secretstorage",
+    "pydantic", "pydantic_core", "typer", "rich", "click",
+]
+
 a = Analysis(
     [os.path.join(APP, "launcher.py")],
     pathex=[RAIZ, APP],
@@ -41,7 +66,7 @@ a = Analysis(
     datas=[
         # La interfaz completa (html, css, js, tokens, assets).
         (os.path.join(APP, "web"), "web"),
-    ],
+    ] + ([(_MARCA_AUDIO, ".")] if CON_AUDIO else []),
     hiddenimports=[
         # Los importa el server por nombre y PyInstaller no siempre los ve.
         "server", "jobs",
@@ -52,28 +77,19 @@ a = Analysis(
     ],
     hookspath=[],
     runtime_hooks=[],
+    # En el build público se excluye el módulo de audio y su árbol de
+    # dependencias. Hay que hacerlo explícitamente: audio.verificar_entorno() hace
+    # `import yt_dlp` para detectar si está, y a PyInstaller le alcanza ese import
+    # para arrastrarlo con websockets, requests, mutagen, curl_cffi y compañía
+    # (unos 14 MB, y un descargador de audio dentro del binario). Sacarlos no
+    # rompe nada: el import está en try/except ImportError y el resultado es
+    # "audio no disponible", que es el estado correcto ahí.
     excludes=[
         # Nada de esto se usa y sacarlo baja bastante el peso.
         "tkinter", "unittest", "pydoc", "doctest", "test",
         "numpy", "pandas", "matplotlib", "PIL",
         "streamlit", "fastapi", "uvicorn", "pytest",
-
-        # El módulo de audio y TODO su árbol de dependencias.
-        #
-        # Hay que excluirlos explícitamente: audio.verificar_entorno() hace
-        # `import yt_dlp` para detectar si está disponible, y a PyInstaller le
-        # alcanza ese import para arrastrarlo con websockets, requests, urllib3,
-        # mutagen, curl_cffi y compañía — unos 16 MB, y un descargador de audio
-        # dentro del binario público, que es justo lo que queremos evitar.
-        #
-        # Sacarlos no rompe nada: el import está en un try/except ImportError y
-        # el resultado es "audio no disponible", que es el estado correcto para
-        # el ejecutable público.
-        "yt_dlp", "tiddl",
-        "requests", "requests_cache", "urllib3", "websockets",
-        "mutagen", "brotli", "curl_cffi", "Cryptodome", "secretstorage",
-        "pydantic", "pydantic_core", "typer", "rich", "click",
-    ],
+    ] + ([] if CON_AUDIO else DEPS_AUDIO),
     noarchive=False,
 )
 
@@ -85,7 +101,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="Migrador de Catalogos",
+    name="Migrador de Catalogos" + (" (con audio)" if CON_AUDIO else ""),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

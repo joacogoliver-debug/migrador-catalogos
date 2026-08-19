@@ -33,7 +33,7 @@ import relevar_core
 def relevar_catalogo(url, yt_key, with_codes=True, progress=None, use_musicbrainz=False):
     """Releva el catálogo y lo devuelve ya agrupado en productos.
 
-    Devuelve (productos, artista, tracks_planos).
+    Devuelve (productos, artista, tracks_planos, diagnostico_del_canal).
     """
     log = progress or (lambda *_: None)
     # relevar_core.relevar() devuelve un DICT, no una tupla: desempaquetarlo como
@@ -46,7 +46,18 @@ def relevar_catalogo(url, yt_key, with_codes=True, progress=None, use_musicbrain
     artista = res["artist"]
     prods = productos_mod.group_products(tracks, artist=artista)
     log(f"[productos] {len(prods)} productos a partir de {len(tracks)} tracks")
-    return prods, artista, tracks
+
+    # Diagnóstico del canal: si no trae descripciones auto-generadas, el
+    # catálogo sale sin álbumes ni códigos y hay que avisarlo.
+    diag = {
+        "es_topic": res.get("es_topic", True),
+        "cobertura_metadata": res.get("cobertura_metadata", 1.0),
+        "topic_sugerido": res.get("topic_sugerido"),
+        "canal": res.get("channel_title", ""),
+    }
+    if diag["cobertura_metadata"] < relevar_core.UMBRAL_METADATA:
+        log("[aviso] el canal no trae metadata auto-generada: sin álbumes ni códigos")
+    return prods, artista, tracks, diag
 
 
 def opciones_de_filtro(prods):
@@ -134,7 +145,7 @@ def migrar(url, yt_key, ids=None, year_from=None, year_to=None, distributors=Non
            quiere_planilla=True, quiere_audio=False, quiere_portadas=True,
            tidal_session=None, out_path=None, log=print):
     """Corre los 4 pasos de una. Devuelve dict con el resultado."""
-    prods, artista, _ = relevar_catalogo(url, yt_key, progress=log)
+    prods, artista, _, _diag = relevar_catalogo(url, yt_key, progress=log)
     seleccion = productos_mod.filter_products(
         prods, ids=ids, year_from=year_from, year_to=year_to, distributors=distributors,
     )

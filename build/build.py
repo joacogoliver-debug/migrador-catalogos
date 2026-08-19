@@ -115,6 +115,11 @@ def resumen():
 
 
 if __name__ == "__main__":
+    if "--con-audio" in sys.argv:
+        # El spec lo lee de acá. Es para uso propio: mete tiddl/yt-dlp dentro del
+        # ejecutable, algo que el build publico evita a proposito.
+        os.environ["MIGRADOR_BUILD_AUDIO"] = "1"
+        print(">>> Variante CON audio (uso propio, no para publicar)")
     revisar_entorno()
     if "--sin-tests" not in sys.argv:
         probar_tests()

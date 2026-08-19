@@ -52,9 +52,18 @@ from jobs import Registry                     # noqa: E402
 
 VERSION = "1.0.0"
 
-# El módulo de audio viene apagado. Se prende con MIGRADOR_AUDIO=1 y aun así
-# sólo aparece si el entorno lo soporta.
-AUDIO_HABILITADO = os.environ.get("MIGRADOR_AUDIO", "").strip().lower() in ("1", "true", "si", "sí")
+def _audio_habilitado():
+    """El módulo de audio viene apagado salvo que se pida explícitamente.
+
+    Dos formas de prenderlo, y aun así sólo aparece si el entorno lo soporta:
+      - MIGRADOR_AUDIO=1 al correr desde el código;
+      - el archivo CON_AUDIO que deja adentro el build `--con-audio`, porque un
+        ejecutable que se abre con doble clic no puede recibir variables de
+        entorno.
+    """
+    if os.environ.get("MIGRADOR_AUDIO", "").strip().lower() in ("1", "true", "si", "sí"):
+        return True
+    return os.path.exists(os.path.join(_base_recursos(), "CON_AUDIO"))
 
 def _base_recursos():
     """Carpeta donde viven los archivos de la interfaz.
@@ -69,6 +78,7 @@ def _base_recursos():
 
 
 WEB_DIR = os.path.join(_base_recursos(), "web")
+AUDIO_HABILITADO = _audio_habilitado()
 MAX_BODY = 8 * 1024 * 1024          # 8 MB: los payloads son listas de ids
 
 
@@ -127,6 +137,7 @@ class Estado:
     def __init__(self):
         self.productos = []
         self.artista = ""
+        self.diagnostico = {}
         self.tidal = None
         self.zips = {}              # job_id -> ruta del zip
         self.temporales = []
@@ -191,10 +202,11 @@ def producto_json(p):
     }
 
 
-def catalogo_json(productos, artista):
+def catalogo_json(productos, artista, diag=None):
     desde, hasta = P.year_range(productos)
     return {
         "artista": artista,
+        "diagnostico": diag or {},
         "productos": [producto_json(p) for p in productos],
         "resumen": P.summarize(productos),
         "filtros": {
@@ -245,14 +257,15 @@ def api_relevar(body):
     con_codigos = bool(body.get("con_codigos", True))
 
     def trabajo(job):
-        prods, artista, _ = M.relevar_catalogo(
+        prods, artista, _, diag = M.relevar_catalogo(
             url, clave, with_codes=con_codigos,
             progress=lambda m, f=None: job.avance(m, f))
         with ESTADO.lock:
             ESTADO.productos = prods
             ESTADO.artista = artista
+            ESTADO.diagnostico = diag
         job.avance(f"{len(prods)} productos encontrados.", 1.0)
-        return catalogo_json(prods, artista)
+        return catalogo_json(prods, artista, diag)
 
     return {"job": JOBS.lanzar("relevar", trabajo).a_dict()}
 
@@ -421,7 +434,8 @@ class Handler(BaseHTTPRequestHandler):
             # un F5 accidental.
             if not ESTADO.productos:
                 return self._error("No hay un catálogo cargado.", HTTPStatus.NOT_FOUND)
-            return self._json(catalogo_json(ESTADO.productos, ESTADO.artista))
+            return self._json(catalogo_json(ESTADO.productos, ESTADO.artista,
+                                            ESTADO.diagnostico))
 
         m = re.fullmatch(r"/api/job/([0-9a-f]{6,32})", ruta)
         if m:

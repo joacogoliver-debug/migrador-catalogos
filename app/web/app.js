@@ -300,6 +300,36 @@ function bloqueProgreso(conCancelar = true) {
 
 /* ------------------------------------------------------------ paso 2 */
 
+function avisoCanal() {
+  const d = (S.catalogo && S.catalogo.diagnostico) || {};
+  if (d.cobertura_metadata === undefined || d.cobertura_metadata >= 0.3) return '';
+
+  const sug = d.topic_sugerido;
+  const pct = Math.round((d.cobertura_metadata || 0) * 100);
+  return alerta('warn', '⚠️', `
+    <strong>Este canal no trae la metadata del catálogo.</strong>
+    Sólo ${pct}% de los videos tiene los datos auto-generados de YouTube, así que
+    no hay álbumes, sellos ni años, y los códigos ISRC/UPC casi no se pueden
+    encontrar.
+    <p style="margin:8px 0 0">
+      Pasa cuando se releva el <em>canal común</em> del artista, donde los videos
+      se suben a mano. El que sirve es el <strong>canal Topic</strong>, que YouTube
+      genera solo y trae <span class="mono">Provided to YouTube by…</span> en cada
+      descripción.
+    </p>
+    ${sug ? `
+      <div class="row" style="margin-top:12px">
+        <button class="btn btn-dark btn-sm" data-accion="usar-topic">
+          Relevar «${esc(sug.titulo)}» en su lugar
+        </button>
+        <span class="small muted">Es el canal correcto de este artista.</span>
+      </div>` : `
+      <p class="small muted" style="margin-top:8px">
+        No encontré un canal Topic para este artista. Buscá
+        «${esc(S.catalogo.artista)} - Topic» en YouTube y pegá ese link.
+      </p>`}`);
+}
+
 function vistaPaso2() {
   const c = S.catalogo;
   const ps = productosFiltrados();
@@ -308,6 +338,7 @@ function vistaPaso2() {
 
   return `
   <div class="fade">
+    ${avisoCanal()}
     <div class="card">
       <div class="card-head row row-wrap">
         <div class="grow">
@@ -521,7 +552,7 @@ function vistaPaso3() {
             <input type="checkbox" ${o.audio ? 'checked' : ''} ${puedeAudio ? '' : 'disabled'} data-opcion-check="audio" />
             <span class="check-texto"><strong>Audios</strong>
               <span class="sub">${puedeAudio
-                ? 'FLAC lossless si conectás tu cuenta de Tidal; si no, referencia de YouTube.'
+                ? 'FLAC lossless con tu cuenta de Tidal. La referencia de YouTube casi siempre falla: YouTube la bloquea.'
                 : 'No disponible: falta ffmpeg o las dependencias de audio.'}</span>
             </span>
           </label>
@@ -562,9 +593,12 @@ function bloqueTidal(conectada) {
       ${S.tidal.aviso ? `<p class="small" style="margin-top:8px">${esc(S.tidal.aviso)}</p>` : ''}`)}</div>`;
   }
   return `<div style="margin-top:18px">${alerta('warn', '⚠️', `
-    <strong>Sin cuenta de Tidal, el audio va a ser de referencia.</strong>
-    El audio de YouTube ya viene comprimido: sirve para inventario o verificación, pero
-    <strong>no es apto para entregar</strong> a una distribuidora.
+    <strong>Conectá Tidal para poder bajar el audio.</strong>
+    Sin cuenta conectada sólo se puede intentar la referencia de YouTube, y hoy
+    <strong>falla en la mayoría de los casos</strong>: YouTube pide un token de origen
+    que sólo se obtiene desde un navegador con sesión, y buena parte del audio de
+    música está protegido con DRM. Cuando falla, el reporte te dice el motivo track
+    por track.
     <div class="row" style="margin-top:10px">
       <button class="btn btn-dark btn-sm" data-accion="tidal-iniciar">Conectar mi cuenta de Tidal</button>
     </div>
@@ -709,6 +743,23 @@ const ACCIONES = {
 
   async cancelar() {
     if (S.job) { try { await api(`/api/job/${S.job.id}/cancelar`, {}); } catch (_) {} }
+  },
+
+  async 'usar-topic'() {
+    const sug = (S.catalogo && S.catalogo.diagnostico || {}).topic_sugerido;
+    if (!sug) return;
+    // Relevamos el Topic con el mismo flujo del paso 1, sin que tenga que ir a
+    // buscar el link a mano.
+    S.paso = 1; S.error = ''; S.ocupado = true; S.job = null; render();
+    try {
+      const { job } = await api('/api/relevar', { url: sug.url, con_codigos: true });
+      adoptarCatalogo(await esperarJob(job, () => actualizarProgreso()));
+      S.ocupado = false; render();
+    } catch (e) {
+      S.ocupado = false;
+      S.error = e.message === 'CANCELADO' ? '' : e.message;
+      render();
+    }
   },
 
   'volver-1'() { S.paso = 1; S.error = ''; S.resultado = null; render(); },
