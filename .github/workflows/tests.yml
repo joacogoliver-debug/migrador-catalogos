@@ -51,6 +51,9 @@ jobs:
       - name: Run app backend test (jobs + HTTP server)
         run: python test_app.py
 
+      - name: Run orchestrator contract test
+        run: python test_migrar_core.py
+
       - name: Check modules import without the audio extras
         run: |
           python -c "import productos, portadas, audio, paquete; \

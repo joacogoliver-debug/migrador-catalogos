@@ -66,12 +66,18 @@ async function api(ruta, cuerpo) {
 /** Espera a que termine un trabajo del backend, mostrando el avance. */
 async function esperarJob(job, alAvanzar) {
   let id = job.id;
+  let fallos = 0;
   for (;;) {
     await new Promise((res) => setTimeout(res, 400));
     let j;
     try {
       j = await api(`/api/job/${id}`);
+      fallos = 0;
     } catch (e) {
+      // Un corte aislado no significa que la app se cayó: con keep-alive es
+      // normal que una consulta suelta falle. Sólo avisamos si falla varias
+      // veces seguidas, así un blip no interrumpe un trabajo que va bien.
+      if (++fallos < 5) continue;
       throw new Error('Se perdió la conexión con la app. ¿Se cerró la ventana del servidor?');
     }
     S.job = j;

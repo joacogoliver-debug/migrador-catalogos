@@ -59,7 +59,8 @@ def probar_tests():
     binario que no pasa sus propios tests."""
     paso("Corriendo los tests")
     tests = ["test_parse_description.py", "test_productos.py", "test_validar.py",
-             "test_portadas.py", "test_paquete.py", "test_app.py"]
+             "test_portadas.py", "test_paquete.py", "test_app.py",
+             "test_migrar_core.py"]
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     for t in tests:
         r = subprocess.run([sys.executable, t], cwd=RAIZ, env=env,

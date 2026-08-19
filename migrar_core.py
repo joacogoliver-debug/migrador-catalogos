@@ -36,10 +36,14 @@ def relevar_catalogo(url, yt_key, with_codes=True, progress=None, use_musicbrain
     Devuelve (productos, artista, tracks_planos).
     """
     log = progress or (lambda *_: None)
-    tracks, artista = relevar_core.relevar(
+    # relevar_core.relevar() devuelve un DICT, no una tupla: desempaquetarlo como
+    # tupla toma sus claves y tira "too many values to unpack".
+    res = relevar_core.relevar(
         url, yt_key, with_codes=with_codes, progress=progress,
         use_musicbrainz=use_musicbrainz,
     )
+    tracks = res["tracks"]
+    artista = res["artist"]
     prods = productos_mod.group_products(tracks, artist=artista)
     log(f"[productos] {len(prods)} productos a partir de {len(tracks)} tracks")
     return prods, artista, tracks

@@ -371,6 +371,11 @@ RUTAS_POST_SIN_BODY = {
 class Handler(BaseHTTPRequestHandler):
     server_version = f"Migrador/{VERSION}"
     protocol_version = "HTTP/1.1"
+    # Con HTTP/1.1 las conexiones quedan vivas esperando el pedido siguiente. Sin
+    # timeout, una conexion abandonada deja el hilo colgado y el cierre puede
+    # llegar justo cuando el cliente va a reusarla (en Windows eso aparece como
+    # WinError 10053 del lado del cliente). Con timeout se cierran ordenadamente.
+    timeout = 60
 
     # ---- utilidades ----
 
@@ -444,8 +449,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(tam))
         self.end_headers()
         # En bloques: un catálogo con audio puede pesar varios GB y no entra en RAM.
-        with open(ruta, "rb") as f:
-            shutil.copyfileobj(f, self.wfile, length=1024 * 256)
+        try:
+            with open(ruta, "rb") as f:
+                shutil.copyfileobj(f, self.wfile, length=1024 * 256)
+        except (BrokenPipeError, ConnectionError):
+            # El usuario canceló la descarga. No es un error nuestro; cortamos la
+            # conexión y listo, sin ensuciar la consola con un traceback.
+            self.close_connection = True
 
     def _estatico(self, ruta):
         if ruta in ("/", "/index.html"):

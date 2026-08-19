@@ -27,6 +27,21 @@ sys.path.insert(0, os.path.join(HERE, "app"))
 sys.path.insert(0, HERE)
 
 
+
+def _esperar(cond, segundos=30, paso=0.02):
+    """Espera hasta que cond() sea verdadera. Por reloj y no por cantidad de
+    vueltas: un runner de CI cargado puede tardar mucho mas que una maquina
+    libre, y un test que se rinde por conteo se vuelve inestable justo en la
+    puerta del build."""
+    import time as _t
+    limite = _t.monotonic() + segundos
+    while _t.monotonic() < limite:
+        if cond():
+            return True
+        _t.sleep(paso)
+    return cond()
+
+
 def main():
     import jobs as J
     import productos as P
@@ -54,10 +69,7 @@ def main():
         return {"valor": 42}
 
     j = reg.lanzar("prueba", ok)
-    for _ in range(100):
-        if j.estado in ("listo", "error"):
-            break
-        time.sleep(0.02)
+    _esperar(lambda: j.estado in ("listo", "error"))
     expect("job.estado_ok", j.estado, "listo")
     expect("job.resultado", j.resultado, {"valor": 42})
     expect("job.progreso_final", j.progreso, 1.0)
@@ -71,10 +83,7 @@ def main():
         raise RuntimeError("se rompió algo")
 
     j = reg.lanzar("prueba", falla)
-    for _ in range(100):
-        if j.estado in ("listo", "error"):
-            break
-        time.sleep(0.02)
+    _esperar(lambda: j.estado in ("listo", "error"))
     expect("job.estado_error", j.estado, "error")
     expect("job.error_mensaje", j.error, "se rompió algo")
     check("job.traceback_al_log", any("TRACEBACK" in x for x in j.log))
@@ -92,13 +101,10 @@ def main():
         return "no deberia llegar"
 
     j = reg.lanzar("prueba", largo)
-    arrancó.wait(2)
+    check("job.cancelable_arranco", arrancó.wait(30))
     time.sleep(0.05)
     j.cancelar()
-    for _ in range(200):
-        if j.estado in ("cancelado", "listo", "error"):
-            break
-        time.sleep(0.02)
+    _esperar(lambda: j.estado in ("cancelado", "listo", "error"))
     expect("job.cancelado", j.estado, "cancelado")
     check("job.cancelado_sin_resultado", j.resultado is None, f"resultado={j.resultado!r}")
 
@@ -109,10 +115,7 @@ def main():
         return True
 
     j = reg.lanzar("prueba", charlatan)
-    for _ in range(400):
-        if j.estado in ("listo", "error"):
-            break
-        time.sleep(0.02)
+    _esperar(lambda: j.estado in ("listo", "error"), segundos=60)
     expect("job.log_acotado_estado", j.estado, "listo")
     check("job.log_acotado", len(j.log) <= J.MAX_LOG, f"len={len(j.log)}")
     # Conserva el arranque y la cola.
@@ -144,27 +147,48 @@ def main():
     puerto = srv.server_address[1]
     base = f"http://127.0.0.1:{puerto}"
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    time.sleep(0.3)
+
+    def _responde():
+        try:
+            urllib.request.urlopen(f"{base}/api/config", timeout=2).read()
+            return True
+        except Exception:
+            return False
+
+    check("http.arranco", _esperar(_responde, 30, 0.05), "el servidor no respondio")
 
     def get(ruta):
-        try:
-            with urllib.request.urlopen(f"{base}{ruta}", timeout=20) as r:
-                return r.status, r.read(), dict(r.headers)
-        except urllib.error.HTTPError as e:
-            return e.code, e.read(), dict(e.headers)
+        # Reintento ante cortes de conexion: con keep-alive en Windows una
+        # consulta suelta puede abortar (WinError 10053). Acá probamos la lógica
+        # del backend, no la sincronización de sockets del sistema.
+        for intento in range(4):
+            try:
+                with urllib.request.urlopen(f"{base}{ruta}", timeout=20) as r:
+                    return r.status, r.read(), dict(r.headers)
+            except urllib.error.HTTPError as e:
+                return e.code, e.read(), dict(e.headers)
+            except (ConnectionError, OSError):
+                if intento == 3:
+                    raise
+                time.sleep(0.2)
 
     def post(ruta, cuerpo):
         req = urllib.request.Request(
             f"{base}{ruta}", data=json.dumps(cuerpo).encode(),
             headers={"Content-Type": "application/json"}, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                return r.status, json.loads(r.read())
-        except urllib.error.HTTPError as e:
+        for intento in range(4):
             try:
-                return e.code, json.loads(e.read())
-            except ValueError:
-                return e.code, {}
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    return r.status, json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                try:
+                    return e.code, json.loads(e.read())
+                except ValueError:
+                    return e.code, {}
+            except (ConnectionError, OSError):
+                if intento == 3:
+                    raise
+                time.sleep(0.2)
 
     try:
         # --- estáticos ---
@@ -231,7 +255,9 @@ def main():
         job_id = res["job"]["id"]
 
         resultado = None
-        for _ in range(300):
+        import time as _t
+        limite = _t.monotonic() + 120
+        while _t.monotonic() < limite:
             cod, cuerpo, _ = get(f"/api/job/{job_id}")
             est = json.loads(cuerpo)
             if est["estado"] == "listo":
@@ -240,7 +266,7 @@ def main():
             if est["estado"] == "error":
                 fails.append(f"  [api.preparar_job] error: {est.get('error')}")
                 break
-            time.sleep(0.05)
+            _t.sleep(0.05)
 
         check("api.preparar_termino", resultado is not None)
         if resultado:
