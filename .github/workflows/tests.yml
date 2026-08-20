@@ -15,10 +15,11 @@ jobs:
         with:
           lfs: false
 
-      - name: Set up Python 3.12
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          # Alineado con el workflow de build: tiddl 3.x pide >=3.13.
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |

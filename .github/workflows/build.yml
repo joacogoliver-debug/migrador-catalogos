@@ -48,7 +48,11 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          # 3.13 y no 3.12: tiddl 3.x declara Requires-Python >=3.13, y en 3.12
+          # pip resuelve a la 2.8.0, que no tiene la clase TidalAPI que usa el
+          # modulo de audio. Se compilaba la variante sin audio y fallaba la
+          # completa con "No matching distribution found for tiddl".
+          python-version: "3.13"
 
       - name: Instalar dependencias
         run: |
