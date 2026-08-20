@@ -94,20 +94,54 @@ def resolve_channel(url, key):
 
 RE_TOPIC = re.compile(r"\s*-\s*Topic$", re.I)
 
-# Por debajo de esta proporción de tracks con distribuidora, damos por hecho que
-# el canal no tiene descripciones auto-generadas y no se puede sacar metadata.
-UMBRAL_METADATA = 0.30
+# Sufijos que llevan los canales oficiales (OAC) y que el canal Topic NO tiene.
+# Sacarlos antes de buscar es lo que hace que "Fulano Oficial" encuentre
+# "Fulano - Topic": buscando con el sufijo no matchea nunca.
+RE_SUFIJOS_OAC = re.compile(r"\b(oficial|official|vevo)\b", re.I)
+
+# Por debajo de esta similitud entre el nombre del canal pedido y el del Topic
+# preferimos no arriesgar: mejor no cambiar de canal que relevar el catálogo de
+# otro artista con nombre parecido.
+MIN_SIMILITUD_TOPIC = 0.70
 
 
-def buscar_canal_topic(artista, key):
-    """Busca el canal "<artista> - Topic". Devuelve (channel_id, titulo) o None.
+def _nombre_artista(titulo):
+    """Nombre del artista sin "- Topic" ni sufijos de OAC."""
+    n = RE_TOPIC.sub("", titulo or "").strip()
+    n = RE_SUFIJOS_OAC.sub("", n)
+    return re.sub(r"\s+", " ", n).strip(" -\u00b7|")
 
-    Cuesta 100 unidades de cuota (search.list), bastante más que relevar un
-    catálogo entero, así que se llama SÓLO cuando ya sabemos que el canal que
-    pidió el usuario no tiene metadata: ahí el gasto se justifica porque es la
-    diferencia entre un resultado inútil y uno completo.
+
+def es_canal_topic(titulo):
+    return bool(RE_TOPIC.search((titulo or "").strip()))
+
+
+def canal_uploads_por_id(channel_id, key):
+    """(uploads_playlist_id, titulo) de un channel_id, o (None, None)."""
+    data = api_get("channels", {"part": "snippet,contentDetails", "id": channel_id}, key)
+    items = data.get("items") or []
+    if not items:
+        return None, None
+    ch = items[0]
+    return ch["contentDetails"]["relatedPlaylists"]["uploads"], ch["snippet"]["title"]
+
+
+def buscar_canal_topic(titulo_canal, key):
+    """Busca el canal "<artista> - Topic" a partir del título de otro canal.
+
+    Sirve cuando te pasan un OAC: el Topic es el único que trae las descripciones
+    auto-generadas con distribuidora, álbum, año y sello, y a veces es difícil de
+    encontrar a mano.
+
+    Devuelve (channel_id, titulo) o None. Busca primero coincidencia exacta del
+    nombre base (sin acentos ni sufijos); si no hay, acepta el más parecido
+    siempre que supere MIN_SIMILITUD_TOPIC.
+
+    Cuesta 100 unidades de cuota (search.list), más que relevar un catálogo
+    entero, así que se llama sólo cuando hace falta.
     """
-    objetivo = _normalize(RE_TOPIC.sub("", artista or "").strip())
+    artista = _nombre_artista(titulo_canal)
+    objetivo = _normalize(artista)
     if not objetivo:
         return None
     try:
@@ -116,17 +150,23 @@ def buscar_canal_topic(artista, key):
     except Exception:
         return None
 
+    mejor, mejor_score = None, 0.0
     for it in data.get("items") or []:
         sn = it.get("snippet") or {}
         titulo = sn.get("channelTitle") or sn.get("title") or ""
-        if not RE_TOPIC.search(titulo):
+        if not es_canal_topic(titulo):
             continue
-        # El nombre tiene que coincidir, sin acentos: "Román" vs "Roman".
-        if _normalize(RE_TOPIC.sub("", titulo).strip()) == objetivo:
-            cid = (sn.get("channelId") or (it.get("id") or {}).get("channelId"))
-            if cid:
-                return cid, titulo
-    return None
+        cid = sn.get("channelId") or (it.get("id") or {}).get("channelId")
+        if not cid:
+            continue
+        base = _normalize(_nombre_artista(titulo))
+        if base == objetivo:
+            return cid, titulo                      # exacto: no hay nada mejor
+        score = SequenceMatcher(None, objetivo, base).ratio()
+        if score > mejor_score:
+            mejor, mejor_score = (cid, titulo), score
+
+    return mejor if mejor_score >= MIN_SIMILITUD_TOPIC else None
 
 
 def list_video_ids(uploads_playlist, key):
@@ -685,6 +725,22 @@ def relevar(url, yt_key, with_codes=True, progress=None, use_musicbrainz=False):
 
     step("Resolviendo canal…", 0.05)
     _ch_id, uploads, title = resolve_channel(url, yt_key)
+    canal_pedido = title
+
+    # Si lo que pegaron NO es un canal Topic (típicamente un OAC), buscamos su
+    # Topic y relevamos ese. El Topic es el único que trae las descripciones
+    # auto-generadas con distribuidora, álbum, año y sello; un OAC tiene videos
+    # subidos a mano y de ahí no sale metadata. Encontrar el Topic a mano suele
+    # ser molesto, así que lo hace la app.
+    via_topic = False
+    if not es_canal_topic(title):
+        step("El canal no es un Topic: buscando el Topic del artista…", 0.10)
+        hallado = buscar_canal_topic(title, yt_key)
+        if hallado:
+            t_uploads, t_title = canal_uploads_por_id(hallado[0], yt_key)
+            if t_uploads:
+                uploads, title, via_topic = t_uploads, t_title, True
+                step(f"Uso el canal Topic: {t_title}", 0.12)
 
     step("Listando productos…", 0.15)
     vids = list_video_ids(uploads, yt_key)
@@ -693,25 +749,35 @@ def relevar(url, yt_key, with_codes=True, progress=None, use_musicbrainz=False):
 
     step(f"Bajando metadata de {len(vids)} productos…", 0.30)
     videos = fetch_videos(vids, yt_key)
-    tracks = build_tracks(videos)
 
-    artist = RE_TOPIC.sub("", title).strip()
+    # Nos quedamos SÓLO con los lanzamientos: los que tienen distribuidora
+    # parseada de "Provided to YouTube by". Los demás (vlogs, vivos, videoclips,
+    # entrevistas) no son productos de catálogo y sin metadata sólo ensucian el
+    # resultado: sin este filtro, un canal común devolvía cientos de "productos"
+    # sin álbum ni códigos.
+    todos = build_tracks(videos)
+    tracks = [t for t in todos if t["distributor"] != "(sin datos)"]
+    descartados = len(todos) - len(tracks)
 
-    # ¿El canal tiene descripciones auto-generadas? Sin ellas no hay
-    # distribuidora, ni álbum, ni año, ni sello, y el matcheo de códigos casi no
-    # engancha porque los títulos traen ruido ("(Video Oficial)") y las
-    # duraciones incluyen intros de video. Conviene detectarlo y decirlo, en vez
-    # de devolver un catálogo vacío de datos como si estuviera todo bien.
-    con_dist = sum(1 for t in tracks if t["distributor"] != "(sin datos)")
-    cobertura = con_dist / len(tracks) if tracks else 0.0
-    es_topic = bool(RE_TOPIC.search(title))
+    if not tracks:
+        raise RelevarError(
+            "No encontré lanzamientos en este canal: ninguno de sus "
+            f"{len(todos)} videos tiene la descripción auto-generada de YouTube "
+            "(la que dice «Provided to YouTube by»). "
+            "Eso pasa cuando el canal es un OAC con videos subidos a mano. "
+            "Probá pegando el link del canal «<artista> - Topic», que es el que "
+            "YouTube genera solo con el catálogo distribuido.")
+
+    if descartados:
+        step(f"Descarté {descartados} videos que no son lanzamientos.", 0.45)
+
+    artist = _nombre_artista(title)
+
+    # Después del filtro, todo lo que quedó tiene metadata, así que la cobertura
+    # es 1.0 por construcción. El campo se mantiene porque la interfaz lo usa.
+    es_topic = es_canal_topic(title)
+    cobertura = 1.0
     topic_sugerido = None
-    if cobertura < UMBRAL_METADATA and not es_topic:
-        step("El canal no trae metadata; buscando el canal Topic…", 0.45)
-        hallado = buscar_canal_topic(artist, yt_key)
-        if hallado:
-            topic_sugerido = {"id": hallado[0], "titulo": hallado[1],
-                              "url": f"https://www.youtube.com/channel/{hallado[0]}"}
 
     codes_stats = None
     if with_codes:
@@ -732,4 +798,9 @@ def relevar(url, yt_key, with_codes=True, progress=None, use_musicbrainz=False):
         "es_topic": es_topic,
         "cobertura_metadata": round(cobertura, 3),
         "topic_sugerido": topic_sugerido,
+        # Para contarle al usuario qué canal se usó y qué quedó afuera, en vez de
+        # que el cambio ocurra a sus espaldas.
+        "via_topic": via_topic,
+        "canal_pedido": canal_pedido,
+        "descartados": descartados,
     }

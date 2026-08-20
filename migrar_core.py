@@ -54,9 +54,16 @@ def relevar_catalogo(url, yt_key, with_codes=True, progress=None, use_musicbrain
         "cobertura_metadata": res.get("cobertura_metadata", 1.0),
         "topic_sugerido": res.get("topic_sugerido"),
         "canal": res.get("channel_title", ""),
+        # Si el usuario pegó un OAC, se relevó el Topic en su lugar: hay que
+        # decírselo, no cambiar de canal en silencio.
+        "via_topic": bool(res.get("via_topic")),
+        "canal_pedido": res.get("canal_pedido", ""),
+        "descartados": int(res.get("descartados") or 0),
     }
-    if diag["cobertura_metadata"] < relevar_core.UMBRAL_METADATA:
-        log("[aviso] el canal no trae metadata auto-generada: sin álbumes ni códigos")
+    if diag["via_topic"]:
+        log(f"[canal] pegaste «{diag['canal_pedido']}» pero relevé su Topic: «{diag['canal']}»")
+    if diag["descartados"]:
+        log(f"[canal] descarté {diag['descartados']} videos que no son lanzamientos")
     return prods, artista, tracks, diag
 
 

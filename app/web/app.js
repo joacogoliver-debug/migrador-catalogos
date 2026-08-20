@@ -337,32 +337,45 @@ function bloqueProgreso(conCancelar = true) {
 
 function avisoCanal() {
   const d = (S.catalogo && S.catalogo.diagnostico) || {};
-  if (d.cobertura_metadata === undefined || d.cobertura_metadata >= 0.3) return '';
+  const partes = [];
 
-  const sug = d.topic_sugerido;
-  const pct = Math.round((d.cobertura_metadata || 0) * 100);
-  return alerta('warn', '⚠️', `
-    <strong>Este canal no trae la metadata del catálogo.</strong>
-    Sólo ${pct}% de los videos tiene los datos auto-generados de YouTube, así que
-    no hay álbumes, sellos ni años, y los códigos ISRC/UPC casi no se pueden
-    encontrar.
-    <p style="margin:8px 0 0">
-      Pasa cuando se releva el <em>canal común</em> del artista, donde los videos
-      se suben a mano. El que sirve es el <strong>canal Topic</strong>, que YouTube
-      genera solo y trae <span class="mono">Provided to YouTube by…</span> en cada
-      descripción.
-    </p>
-    ${sug ? `
-      <div class="row" style="margin-top:12px">
-        <button class="btn btn-dark btn-sm" data-accion="usar-topic">
-          Relevar «${esc(sug.titulo)}» en su lugar
-        </button>
-        <span class="small muted">Es el canal correcto de este artista.</span>
-      </div>` : `
-      <p class="small muted" style="margin-top:8px">
-        No encontré un canal Topic para este artista. Buscá
-        «${esc(S.catalogo.artista)} - Topic» en YouTube y pegá ese link.
-      </p>`}`);
+  // Caso habitual y bueno: pegaron un OAC y la app encontró el Topic sola.
+  if (d.via_topic && d.canal) {
+    partes.push(alerta('ok', '✓', `
+      Pegaste <strong>${esc(d.canal_pedido || 'un canal común')}</strong>, que no es
+      un canal Topic, así que busqué y relevé
+      <strong>${esc(d.canal)}</strong>.
+      <span class="small muted">El Topic es el que YouTube genera solo con el
+      catálogo distribuido: es el único que trae distribuidora, álbum, año y
+      sello.</span>`));
+  }
+
+  if (d.descartados) {
+    partes.push(alerta('', 'ℹ️', `
+      Dejé afuera <strong>${num(d.descartados)} videos</strong> que no son
+      lanzamientos (videoclips, vivos, entrevistas). Sin la descripción
+      auto-generada de YouTube no tienen álbum ni códigos, así que no sirven para
+      una migración.`));
+  }
+
+  // Sólo si algo salió raro: el canal es Topic pero igual falta metadata.
+  if (d.cobertura_metadata !== undefined && d.cobertura_metadata < 0.3) {
+    const sug = d.topic_sugerido;
+    partes.push(alerta('warn', '⚠️', `
+      <strong>Este canal no trae la metadata del catálogo.</strong>
+      No hay álbumes, sellos ni años, y los códigos casi no se pueden encontrar.
+      ${sug ? `
+        <div class="row" style="margin-top:12px">
+          <button class="btn btn-dark btn-sm" data-accion="usar-topic">
+            Relevar «${esc(sug.titulo)}» en su lugar
+          </button>
+        </div>` : `
+        <p class="small muted" style="margin-top:8px">
+          Buscá «${esc(S.catalogo.artista)} - Topic» en YouTube y pegá ese link.
+        </p>`}`));
+  }
+
+  return partes.join('');
 }
 
 function vistaPaso2() {

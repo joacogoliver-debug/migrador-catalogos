@@ -40,9 +40,10 @@ def main():
     # Si algún día cambia, este test se rompe y avisa: es justamente el punto.
     CLAVES_REALES = {"artist", "channel_title", "tracks", "distribs",
                      "total_views", "units", "codes",
-                     # diagnostico del canal: sin esto la app no puede avisar
-                     # que el canal no trae metadata
-                     "es_topic", "cobertura_metadata", "topic_sugerido"}
+                     # diagnostico del canal: sin esto la app no puede contar que
+                     # cambio de canal ni que descarto videos
+                     "es_topic", "cobertura_metadata", "topic_sugerido",
+                     "via_topic", "canal_pedido", "descartados"}
 
     import inspect
     fuente = inspect.getsource(relevar_core.relevar)
@@ -87,6 +88,9 @@ def main():
                 "es_topic": True,
                 "cobertura_metadata": 1.0,
                 "topic_sugerido": None,
+                "via_topic": False,
+                "canal_pedido": "Artista Doble - Topic",
+                "descartados": 0,
             }
         # Canal comun: sin metadata y con el Topic sugerido.
         sin_datos = [dict(t, distributor="(sin datos)", album="(single / sin álbum)",
@@ -104,6 +108,10 @@ def main():
             "cobertura_metadata": 0.0,
             "topic_sugerido": {"id": "UCxxx", "titulo": "Artista Doble - Topic",
                                "url": "https://www.youtube.com/channel/UCxxx"},
+            # Simula el caso en que se pego un OAC y la app relevo su Topic.
+            "via_topic": True,
+            "canal_pedido": "Artista Doble Oficial",
+            "descartados": 7,
         }
 
     original = relevar_core.relevar
@@ -140,6 +148,7 @@ def main():
         expect("diag.es_topic", diag["es_topic"], True)
         expect("diag.cobertura", diag["cobertura_metadata"], 1.0)
         expect("diag.sin_sugerencia", diag["topic_sugerido"], None)
+        expect("diag.no_cambio_de_canal", diag["via_topic"], False)
 
         # --- diagnostico del canal (caso canal comun: hay que avisar) ----
         escenario["topic"] = False
@@ -148,12 +157,19 @@ def main():
             "https://www.youtube.com/@Test", "clave-falsa",
             progress=lambda m, f=None: avisos2.append(m))
         expect("diag2.no_es_topic", diag2["es_topic"], False)
+        # Lo importante del caso OAC: que se avise el cambio de canal y lo
+        # descartado, en vez de que ocurra en silencio.
+        expect("diag2.via_topic", diag2["via_topic"], True)
+        expect("diag2.canal_pedido", diag2["canal_pedido"], "Artista Doble Oficial")
+        expect("diag2.descartados", diag2["descartados"], 7)
+        check("diag2.loguea_el_cambio",
+              any("relev" in a and "Topic" in a for a in avisos2), f"avisos={avisos2}")
+        check("diag2.loguea_descartados",
+              any("descart" in a for a in avisos2), f"avisos={avisos2}")
         expect("diag2.cobertura_cero", diag2["cobertura_metadata"], 0.0)
         check("diag2.sugiere_topic",
               (diag2["topic_sugerido"] or {}).get("titulo") == "Artista Doble - Topic",
               f"{diag2['topic_sugerido']}")
-        check("diag2.loguea_el_aviso", any("no trae metadata" in a for a in avisos2),
-              f"avisos={avisos2}")
         # Sin álbumes declarados, cada track queda como su propio producto: es el
         # sintoma que ve el usuario (N productos = N tracks).
         expect("diag2.un_producto_por_track", len(prods2), len(tracks_falsos))
