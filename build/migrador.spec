@@ -46,6 +46,28 @@ CON_AUDIO = os.environ.get("MIGRADOR_BUILD_AUDIO", "") == "1"
 # binario que se abre con doble clic no hay forma de pasarla, y pedirle al usuario
 # que abra una consola para usar la funcion principal de su propio build no tiene
 # sentido.
+# El build con audio incluye ffmpeg, que es lo unico que quedaba por instalar a
+# mano. Se copia con el nombre canonico ("ffmpeg.exe") porque tiddl y yt-dlp lo
+# invocan por nombre, y el binario de imageio-ffmpeg viene versionado.
+# Es GPLv3 y va como programa separado, sin modificar: ver
+# build/terceros/FFMPEG-LICENCIA.txt, que se incluye al lado.
+FFMPEG = []
+if CON_AUDIO:
+    try:
+        import imageio_ffmpeg
+        _ff = imageio_ffmpeg.get_ffmpeg_exe()
+        _nombre = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+        _copia = os.path.join(RAIZ, "build", "terceros", _nombre)
+        if not os.path.exists(_copia) or os.path.getsize(_copia) != os.path.getsize(_ff):
+            import shutil as _sh
+            os.makedirs(os.path.dirname(_copia), exist_ok=True)
+            _sh.copy2(_ff, _copia)
+        FFMPEG = [(_copia, "ffmpeg")]
+        print(f"[spec] ffmpeg incluido: {os.path.getsize(_copia) / 1048576:.0f} MB")
+    except Exception as _e:
+        print(f"[spec] ATENCION: no pude incluir ffmpeg ({_e}). "
+              "El usuario va a tener que instalarlo aparte.")
+
 _MARCA_AUDIO = os.path.join(RAIZ, "build", "CON_AUDIO")
 if CON_AUDIO and not os.path.exists(_MARCA_AUDIO):
     with open(_MARCA_AUDIO, "w", encoding="utf-8") as _f:
@@ -66,7 +88,9 @@ a = Analysis(
     datas=[
         # La interfaz completa (html, css, js, tokens, assets).
         (os.path.join(APP, "web"), "web"),
-    ] + ([(_MARCA_AUDIO, ".")] if CON_AUDIO else []),
+    ] + ([(_MARCA_AUDIO, "."),
+          (os.path.join(RAIZ, "build", "terceros", "FFMPEG-LICENCIA.txt"), ".")]
+         if CON_AUDIO else []) + FFMPEG,
     hiddenimports=[
         # Los importa el server por nombre y PyInstaller no siempre los ve.
         "server", "jobs",

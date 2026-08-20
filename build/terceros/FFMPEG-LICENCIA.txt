@@ -1,0 +1,21 @@
+FFMPEG INCLUIDO EN ESTA APLICACION
+==================================
+
+La version de esta app que trae el modulo de audio incluye el ejecutable de
+FFmpeg para poder extraer el FLAC sin que haya que instalar nada aparte.
+
+Build:     ffmpeg 7.1-essentials_build (www.gyan.dev), para Windows x86_64
+Obtenido:  del paquete de PyPI `imageio-ffmpeg`
+Licencia:  GPL version 3 (la build se compila con --enable-gpl
+           --enable-version3)
+
+FFmpeg es software libre de terceros, NO forma parte de esta aplicacion y se
+distribuye sin modificaciones. La app lo invoca como un programa separado
+(un proceso aparte), no lo enlaza ni lo incorpora a su codigo.
+
+Codigo fuente de FFmpeg:   https://ffmpeg.org/download.html
+Fuentes de esta build:     https://www.gyan.dev/ffmpeg/builds/
+Texto de la GPLv3:         https://www.gnu.org/licenses/gpl-3.0.html
+
+El codigo de esta aplicacion se distribuye bajo licencia MIT (ver LICENSE).
+Esa licencia aplica al codigo propio, no al ejecutable de FFmpeg incluido.

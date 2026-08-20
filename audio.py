@@ -29,6 +29,7 @@ Dos decisiones de diseño que sostienen la honestidad de la herramienta:
 import os
 import re
 import shutil
+import sys
 import subprocess
 import tempfile
 import time
@@ -53,6 +54,70 @@ PAGINA_TIDAL = 100
 # ============================================================
 # Chequeo de entorno
 # ============================================================
+
+def _ffmpeg_incluido():
+    """Ruta al ffmpeg que viaja con la app, o None.
+
+    Empaquetado: el build `--con-audio` lo copia a `ffmpeg/ffmpeg.exe` dentro del
+    ejecutable. Desde el código: el que trae el paquete imageio-ffmpeg.
+    """
+    if getattr(sys, "frozen", False):
+        base = getattr(sys, "_MEIPASS", None)
+        if base:
+            for nombre in ("ffmpeg.exe", "ffmpeg"):
+                ruta = os.path.join(base, "ffmpeg", nombre)
+                if os.path.isfile(ruta):
+                    return ruta
+        return None
+    try:
+        import imageio_ffmpeg
+        ruta = imageio_ffmpeg.get_ffmpeg_exe()
+        return ruta if os.path.isfile(ruta) else None
+    except Exception:
+        return None
+
+
+def preparar_ffmpeg():
+    """Deja el ffmpeg incluido al alcance de todo el proceso. Devuelve su ruta.
+
+    tiddl y yt-dlp invocan `ffmpeg` por NOMBRE y confían en el PATH, así que en
+    vez de parchear a cada uno se agrega una carpeta al PATH de este proceso
+    (no toca la configuración de la máquina).
+
+    El binario de imageio-ffmpeg se llama `ffmpeg-win-x86_64-v7.1.exe`, así que
+    agregar su carpeta al PATH no alcanza: `ffmpeg` a secas no existe ahí. Por eso
+    se deja una copia con el nombre que todos esperan, en la carpeta de la app.
+
+    Si la máquina ya tiene su propio ffmpeg, ese gana: respetamos lo que el
+    usuario instaló en vez de imponerle el nuestro.
+    """
+    ya = shutil.which("ffmpeg")
+    if ya:
+        return ya
+
+    origen = _ffmpeg_incluido()
+    if not origen:
+        return None
+
+    esperado = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+    if os.path.basename(origen).lower() == esperado:
+        carpeta = os.path.dirname(origen)
+    else:
+        # Copia con el nombre canónico, una sola vez.
+        carpeta = os.path.join(os.path.expanduser("~"), ".migrador-catalogos", "bin")
+        destino = os.path.join(carpeta, esperado)
+        try:
+            os.makedirs(carpeta, exist_ok=True)
+            if not os.path.exists(destino) or os.path.getsize(destino) != os.path.getsize(origen):
+                shutil.copy2(origen, destino)
+                if os.name != "nt":
+                    os.chmod(destino, 0o755)
+        except OSError:
+            return None
+
+    os.environ["PATH"] = carpeta + os.pathsep + os.environ.get("PATH", "")
+    return shutil.which("ffmpeg")
+
 
 def _existe(cmd):
     return shutil.which(cmd) is not None
@@ -90,9 +155,18 @@ def verificar_entorno():
     except ImportError:
         tiene_ytdlp = _existe("yt-dlp")
 
+    # Antes de decidir qué se puede hacer, dejamos el ffmpeg incluido al alcance.
+    preparar_ffmpeg()
     ffmpeg = _existe("ffmpeg")
     return {
         "ffmpeg": ffmpeg,
+        "ffmpeg_incluido": bool(_ffmpeg_incluido()),
+        # ffprobe es OPCIONAL y el ffmpeg que incluimos no lo trae. Verificado con
+        # archivos reales: sin él, un FLAC-en-MP4 (lo que sirve Tidal cuando hay
+        # máster lossless) igual se extrae a .flac, y un AAC-en-MP4 hace fallar el
+        # remux, queda el contenedor original y el etiquetado lo marca LOSSY por
+        # su extensión. O sea: sin ffprobe se pierde una optimización, no la
+        # correccion del resultado.
         "ffprobe": _existe("ffprobe"),
         "js_runtime": _runtime_js(),
         "tiddl": tiene_tiddl,

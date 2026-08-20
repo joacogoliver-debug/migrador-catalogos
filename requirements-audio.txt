@@ -19,3 +19,12 @@ tiddl>=3.4.1
 
 # Descarga del audio de referencia (lossy) de YouTube.
 yt-dlp>=2024.1.0
+
+# ffmpeg como paquete, para que el build --con-audio lo empaquete adentro del
+# ejecutable y el usuario no tenga que instalarlo aparte. Trae la build
+# "essentials" de gyan.dev (GPLv3): se distribuye sin modificar y se invoca como
+# programa separado. Ver build/terceros/FFMPEG-LICENCIA.txt.
+#
+# Si preferís usar el ffmpeg del sistema, no lo instales: la app usa el del PATH
+# cuando existe y sólo cae al incluido si no encuentra ninguno.
+imageio-ffmpeg>=0.6

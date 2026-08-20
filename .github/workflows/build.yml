@@ -25,19 +25,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        # Dos variantes por plataforma:
+        #   completa = trae el modulo de audio Y ffmpeg adentro, asi no hay nada
+        #              que instalar aparte. Pesa mas e incluye un binario GPLv3
+        #              (ver build/terceros/FFMPEG-LICENCIA.txt).
+        #   sin-audio = solo relevamiento, planilla, validacion y portadas.
+        variante: [completa, sin-audio]
         include:
           - os: windows-latest
             nombre: windows
-            artefacto: "Migrador de Catalogos.exe"
           - os: macos-latest
             nombre: macos
-            artefacto: "Migrador de Catalogos"
           - os: ubuntu-latest
             nombre: linux
-            artefacto: "Migrador de Catalogos"
 
     runs-on: ${{ matrix.os }}
-    name: build (${{ matrix.nombre }})
+    name: build (${{ matrix.nombre }} · ${{ matrix.variante }})
 
     steps:
       - uses: actions/checkout@v4
@@ -52,24 +56,28 @@ jobs:
           pip install -r requirements-app.txt
           pip install pyinstaller
 
+      - name: Instalar dependencias de audio
+        if: matrix.variante == 'completa'
+        # tiddl + yt-dlp + el ffmpeg que se empaqueta adentro.
+        run: pip install -r requirements-audio.txt imageio-ffmpeg
+
       - name: Compilar
         # build.py corre los tests antes de empaquetar y aborta si alguno falla.
-        run: python build/build.py
+        run: python build/build.py ${{ matrix.variante == 'completa' && '--con-audio' || '' }}
 
       - name: Renombrar con la plataforma
         shell: bash
+        env:
+          SUFIJO: ${{ matrix.variante == 'completa' && 'completa' || 'sin-audio' }}
         run: |
           cd dist
+          rm -f *.sha256
           for f in *; do
-            case "$f" in
-              *.sha256) continue ;;
-            esac
             base="${f%.exe}"
             ext=""
             [ "$f" != "$base" ] && ext=".exe"
-            mv "$f" "Migrador-de-Catalogos-${{ matrix.nombre }}${ext}"
+            mv "$f" "Migrador-de-Catalogos-${{ matrix.nombre }}-${SUFIJO}${ext}"
           done
-          rm -f *.sha256
           ls -la
 
       - name: Publicar hash
@@ -96,7 +104,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: migrador-${{ matrix.nombre }}
+          name: migrador-${{ matrix.nombre }}-${{ matrix.variante }}
           path: dist/*
           if-no-files-found: error
 
@@ -116,19 +124,29 @@ jobs:
           files: artefactos/**/*
           generate_release_notes: true
           body: |
-            ## Instalación
+            ## Cuál bajar
 
-            Bajá el archivo de tu sistema, descomprimí si hace falta y abrilo.
+            **`completa`** es la recomendada: trae el módulo de audio y **ffmpeg
+            adentro**, así no hay que instalar nada aparte. Para bajar los audios
+            en FLAC necesitás además tu propia cuenta paga de Tidal.
 
-            | Sistema | Archivo |
-            |---|---|
-            | Windows | `Migrador-de-Catalogos-windows.exe` |
-            | macOS | `Migrador-de-Catalogos-macos` |
-            | Linux | `Migrador-de-Catalogos-linux` |
+            **`sin-audio`** es más liviana y hace todo lo demás: relevamiento,
+            planilla con ISRC y UPC, validación pre-entrega, hoja de ingesta y
+            portadas.
 
-            La primera vez te va a pedir una clave de la YouTube Data API
-            (gratis, se saca en Google Cloud Console). Queda guardada en tu
-            máquina.
+            | Sistema | Completa | Sin audio |
+            |---|---|---|
+            | Windows | `Migrador-de-Catalogos-windows-completa.exe` | `...-windows-sin-audio.exe` |
+            | macOS | `Migrador-de-Catalogos-macos-completa` | `...-macos-sin-audio` |
+            | Linux | `Migrador-de-Catalogos-linux-completa` | `...-linux-sin-audio` |
+
+            Bajás, abrís, y listo: no hay instalador. La primera vez te pide una
+            clave de la YouTube Data API (gratis, se saca en Google Cloud
+            Console) y queda guardada en tu máquina.
+
+            La versión `completa` incluye FFmpeg, que es software de terceros bajo
+            licencia GPLv3 y se distribuye sin modificaciones como programa
+            separado. El detalle está en `build/terceros/FFMPEG-LICENCIA.txt`.
 
             ### El sistema va a avisar que el programa "no es reconocido"
 
