@@ -578,7 +578,7 @@ function vistaPaso3() {
             <span class="check-texto"><strong>Audios</strong>
               <span class="sub">${puedeAudio
                 ? 'FLAC lossless con tu cuenta de Tidal. La referencia de YouTube casi siempre falla: YouTube la bloquea.'
-                : 'No disponible: falta ffmpeg o las dependencias de audio.'}</span>
+                : faltaParaAudio()}</span>
             </span>
           </label>
         </div>` : ''}
@@ -598,6 +598,24 @@ function vistaPaso3() {
       </div>
     </div>
   </div>`;
+}
+
+/** Qué falta para poder bajar audio, con el comando concreto para resolverlo.
+ *  Decir sólo "no disponible" deja a la persona sin saber qué hacer, y este es el
+ *  caso típico de alguien que recibió el ejecutable en una máquina nueva. */
+function faltaParaAudio() {
+  const e = (S.config && S.config.entorno) || {};
+  if (!e.ffmpeg && (e.tiddl || e.yt_dlp)) {
+    return 'Falta <strong>ffmpeg</strong> en esta computadora. Se instala una sola vez, '
+         + 'abriendo PowerShell y pegando: <code>winget install --id Gyan.FFmpeg -e</code>. '
+         + 'Después cerrá y volvé a abrir la app.';
+  }
+  if (!e.tiddl && !e.yt_dlp) {
+    return 'Esta versión de la app no incluye el módulo de audio. Necesitás la versión '
+         + '«con audio».';
+  }
+  return 'No disponible en esta computadora. Abrí la app con <code>--diagnostico</code> '
+       + 'para ver qué falta.';
 }
 
 function bloqueTidal(conectada) {
