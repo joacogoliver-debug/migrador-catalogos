@@ -46,6 +46,9 @@ ETIQUETA_YOUTUBE = "YouTube (lossy) — REFERENCIA, NO apto para entrega"
 TIDAL_WORKERS = 2
 YT_WORKERS = 3
 
+# Tamaño de página al recorrer la discografía. La API topea en 100 por pedido.
+PAGINA_TIDAL = 100
+
 
 # ============================================================
 # Chequeo de entorno
@@ -98,6 +101,19 @@ def verificar_entorno():
         "puede_flac": tiene_tiddl and ffmpeg,
         "puede_referencia": tiene_ytdlp and ffmpeg,
     }
+
+
+def clases_tidal():
+    """Devuelve (TidalAPI, TidalClient) de tiddl.
+
+    El import está acá y no dentro del método que lo usa para poder verificarlo
+    en un test sin credenciales. Nació de un bug real: decía `TidalApi` y la
+    clase es `TidalAPI`. Como el import ocurría recién al usar la sesión, la
+    conexión de Tidal se veía exitosa y después no bajaba ningún audio, sin
+    ninguna pista de por qué.
+    """
+    from tiddl.core.api import TidalAPI, TidalClient
+    return TidalAPI, TidalClient
 
 
 # ============================================================
@@ -197,12 +213,12 @@ class TidalSession:
             raise RuntimeError("La cuenta de Tidal no está conectada.")
         self._refrescar_si_hace_falta()
         if self._api is None:
-            from tiddl.core.api import TidalApi, TidalClient
+            TidalAPI, TidalClient = clases_tidal()
             client = TidalClient(
                 token=self._token,
                 cache_name=os.path.join(self._cache_dir, "api_cache"),
             )
-            self._api = TidalApi(client, self.user_id, self.country_code)
+            self._api = TidalAPI(client, self.user_id, self.country_code)
         return self._api
 
     def close(self):
@@ -227,11 +243,29 @@ def _norm(s):
     return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", (s or "").lower())).strip()
 
 
+class TidalAuthError(RuntimeError):
+    """La sesión de Tidal no sirve (token vencido o revocado).
+
+    Se distingue de "no encontré al artista" a propósito: son dos problemas con
+    soluciones distintas, y confundirlos manda al usuario a buscar por el lado
+    equivocado. Si el token venció hay que reconectar la cuenta, no revisar el
+    nombre del artista.
+    """
+
+
 def buscar_artista_tidal(session, nombre):
-    """Encuentra el artist_id en Tidal. Devuelve (id, nombre) o (None, None)."""
+    """Encuentra el artist_id en Tidal. Devuelve (id, nombre) o (None, None).
+
+    Lanza TidalAuthError si el problema es la sesión y no la búsqueda.
+    """
     try:
         res = session.api.get_search(nombre)
-    except Exception:
+    except Exception as e:
+        texto = str(e).lower()
+        if "401" in texto or "token" in texto or "unauthorized" in texto:
+            raise TidalAuthError(
+                "La sesión de Tidal no es válida o venció. Volvé a conectar la cuenta."
+            ) from e
         return None, None
     artistas = getattr(res, "artists", None)
     items = getattr(artistas, "items", None) or []
@@ -253,29 +287,63 @@ def construir_indice_isrc(session, artista, log=print):
     Esto es lo que permite matchear por código en vez de por título: el ISRC
     identifica la grabación de forma única, así que un match por ISRC es exacto.
     """
-    artist_id, nombre_tidal = buscar_artista_tidal(session, artista)
+    try:
+        artist_id, nombre_tidal = buscar_artista_tidal(session, artista)
+    except TidalAuthError as e:
+        log(f"[tidal] {e}")
+        return {}, None
     if not artist_id:
-        log(f"[tidal] no encontré al artista '{artista}' en Tidal")
+        log(f"[tidal] no encontré a '{artista}' en el catálogo de Tidal. "
+            "Si el nombre difiere del de Tidal, el match por ISRC no se puede armar.")
         return {}, None
 
     log(f"[tidal] artista: {nombre_tidal} (id {artist_id})")
     indice = {}
-    try:
-        albums = session.api.get_artist_albums(artist_id)
-        items = getattr(albums, "items", None) or []
-    except Exception as e:
-        log(f"[tidal] no pude listar la discografía: {e}")
-        return {}, artist_id
+    items = []
+    # Dos cosas que hay que pedir explícitamente:
+    #  - filter: por defecto la API devuelve SÓLO "ALBUMS". Sin pedir también
+    #    "EPSANDSINGLES" ningún single ni EP entra al índice, que en un catálogo
+    #    DIY es la mayor parte del material.
+    #  - paginación: el límite por defecto es 10 álbumes (máximo 100 por página),
+    #    así que sin paginar una discografía grande queda cortada en el ítem 10.
+    for filtro in ("ALBUMS", "EPSANDSINGLES"):
+        offset = 0
+        while True:
+            try:
+                pagina = session.api.get_artist_albums(
+                    artist_id, limit=PAGINA_TIDAL, offset=offset, filter=filtro)
+            except Exception as e:
+                log(f"[tidal] no pude listar {filtro}: {e}")
+                break
+            lote = getattr(pagina, "items", None) or []
+            items.extend(lote)
+            total = getattr(pagina, "totalNumberOfItems", 0) or 0
+            offset += len(lote)
+            if not lote or offset >= total:
+                break
+    log(f"[tidal] releases en la discografía: {len(items)}")
 
     for al in items:
         album_id = getattr(al, "id", None)
         if not album_id:
             continue
-        try:
-            contenido = session.api.get_album_items(album_id)
-            tracks = getattr(contenido, "items", None) or []
-        except Exception:
-            continue
+        tracks = []
+        # Idem con los tracks: el límite por defecto es 20 y un álbum largo o un
+        # recopilado se cortaría por la mitad.
+        offset = 0
+        while True:
+            try:
+                pagina = session.api.get_album_items(
+                    album_id, limit=PAGINA_TIDAL, offset=offset)
+            except Exception:
+                break
+            lote = getattr(pagina, "items", None) or []
+            tracks.extend(lote)
+            total = getattr(pagina, "totalNumberOfItems", 0) or 0
+            offset += len(lote)
+            if not lote or offset >= total:
+                break
+
         for it in tracks:
             t = getattr(it, "item", it)
             isrc = (getattr(t, "isrc", "") or "").upper().strip()

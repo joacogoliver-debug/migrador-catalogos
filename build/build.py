@@ -60,7 +60,7 @@ def probar_tests():
     paso("Corriendo los tests")
     tests = ["test_parse_description.py", "test_productos.py", "test_validar.py",
              "test_portadas.py", "test_paquete.py", "test_app.py",
-             "test_migrar_core.py"]
+             "test_migrar_core.py", "test_audio_tidal.py"]
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     for t in tests:
         r = subprocess.run([sys.executable, t], cwd=RAIZ, env=env,

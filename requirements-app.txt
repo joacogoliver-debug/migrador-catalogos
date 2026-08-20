@@ -7,7 +7,12 @@
 # Generar los Excel del entregable.
 openpyxl>=3.1
 
-# Ventana nativa. Es OPCIONAL: si no está, la app abre en el navegador por
-# defecto y funciona igual. Se incluye acá porque hace que se sienta un programa
-# de escritorio en vez de una pestaña.
-pywebview>=5.0 ; sys_platform != "linux"
+# NO hace falta. La app abre en su propia ventana usando el motor web que ya
+# tiene la máquina (modo aplicación: sin barra de direcciones ni pestañas), así
+# que no necesita un motor propio.
+#
+# pywebview queda como alternativa para quien la quiera al correr desde el
+# código (`python app/launcher.py --ventana-nativa`). Empaquetado no sirve: su
+# backend de Windows va por pythonnet/.NET y se cuelga sin abrir la ventana.
+#
+#   pip install pywebview
