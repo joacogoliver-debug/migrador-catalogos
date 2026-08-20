@@ -270,6 +270,14 @@ function vistaSetup() {
 
 /* ------------------------------------------------------------ paso 1 */
 
+function avisoClaveIncluida() {
+  if (!S.config || !S.config.clave_incluida) return '';
+  return alerta('', 'ℹ️', `
+    Esta copia viene con la <strong>clave de YouTube de Mojo</strong>, así que no
+    hace falta configurar nada. El cupo diario es compartido entre todos los que
+    la usen: alcanza para unos 500 catálogos por día.`);
+}
+
 function vistaPaso1() {
   const corriendo = S.ocupado;
   return `
@@ -294,6 +302,8 @@ function vistaPaso1() {
         <span class="sub">Los busca en Deezer, sin clave ni costo. Tarda un poco más pero son los códigos que la distribuidora nueva necesita.</span>
       </span>
     </label>
+
+    ${avisoClaveIncluida()}
 
     ${S.error ? alerta('danger', '⛔', `<strong>No se pudo relevar.</strong><br>${esc(S.error)}`) : ''}
 

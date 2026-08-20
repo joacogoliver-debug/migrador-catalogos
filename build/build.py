@@ -114,13 +114,60 @@ def resumen():
     print("    porque no está firmado: es esperable, y el README explica cómo seguir.")
 
 
+def preparar_clave():
+    """Deja la clave de YouTube lista para empaquetar. Devuelve True si la incluyo.
+
+    La lee de MIGRADOR_CLAVE_YT o de la config local de la app; NUNCA de un
+    archivo del repositorio, para que no haya forma de que termine commiteada.
+
+    El binario resultante contiene la clave y por lo tanto NO se publica: se
+    reparte a mano a quien corresponda. Por eso este build no corre en CI.
+    """
+    import json as _json
+    clave = os.environ.get("MIGRADOR_CLAVE_YT", "").strip()
+    origen = "la variable MIGRADOR_CLAVE_YT"
+    if not clave:
+        cfg = os.path.join(os.path.expanduser("~"), ".migrador-catalogos", "config.json")
+        if os.path.exists(cfg):
+            try:
+                with open(cfg, encoding="utf-8") as f:
+                    clave = (_json.load(f).get("youtube_api_key") or "").strip()
+                origen = "la config local de la app"
+            except (OSError, ValueError):
+                clave = ""
+    if not clave:
+        sys.exit("No encontre ninguna clave. Pone MIGRADOR_CLAVE_YT=... o cargala "
+                 "primero en la app.")
+
+    # XOR con una semilla fija. NO es seguridad: solo evita que la clave aparezca
+    # en un `strings` del ejecutable. Quien tenga el binario la puede sacar.
+    semilla = 0x5A
+    datos = bytes([semilla]) + bytes(b ^ semilla for b in clave.encode("utf-8"))
+    destino = os.path.join(RAIZ, "build", "terceros", "clave_yt.dat")
+    os.makedirs(os.path.dirname(destino), exist_ok=True)
+    with open(destino, "wb") as f:
+        f.write(datos)
+
+    paso("Clave de YouTube incluida en el ejecutable")
+    print(f"    origen: {origen}")
+    print(f"    termina en: ...{clave[-4:]}   (largo {len(clave)})")
+    print("    ATENCION: este ejecutable CONTIENE la clave.")
+    print("    No lo publiques en un release ni lo subas a un repo:")
+    print("    pasalo a mano solo a quien deba usarla.")
+    return True
+
+
 if __name__ == "__main__":
+    if "--con-clave" in sys.argv:
+        os.environ["MIGRADOR_BUILD_CLAVE"] = "1"
     if "--con-audio" in sys.argv:
         # El spec lo lee de acá. Es para uso propio: mete tiddl/yt-dlp dentro del
         # ejecutable, algo que el build publico evita a proposito.
         os.environ["MIGRADOR_BUILD_AUDIO"] = "1"
         print(">>> Variante CON audio (uso propio, no para publicar)")
     revisar_entorno()
+    if os.environ.get("MIGRADOR_BUILD_CLAVE") == "1":
+        preparar_clave()
     if "--sin-tests" not in sys.argv:
         probar_tests()
     limpiar()

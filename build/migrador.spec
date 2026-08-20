@@ -41,6 +41,16 @@ ICONO = _ico if os.path.exists(_ico) else None
 # se empaqueta.
 CON_AUDIO = os.environ.get("MIGRADOR_BUILD_AUDIO", "") == "1"
 
+# Build interno con la clave de la organizacion adentro (`--con-clave`). Ese
+# binario NO se publica: se reparte a mano. build.py deja el archivo listo.
+CON_CLAVE = os.environ.get("MIGRADOR_BUILD_CLAVE", "") == "1"
+CLAVE = []
+if CON_CLAVE:
+    _cl = os.path.join(RAIZ, "build", "terceros", "clave_yt.dat")
+    if os.path.exists(_cl):
+        CLAVE = [(_cl, ".")]
+        print("[spec] clave de YouTube incluida (build interno, no publicar)")
+
 # La variante con audio deja este archivo adentro del ejecutable. El servidor lo
 # busca para prender el módulo sin depender de una variable de entorno: en un
 # binario que se abre con doble clic no hay forma de pasarla, y pedirle al usuario
@@ -90,7 +100,7 @@ a = Analysis(
         (os.path.join(APP, "web"), "web"),
     ] + ([(_MARCA_AUDIO, "."),
           (os.path.join(RAIZ, "build", "terceros", "FFMPEG-LICENCIA.txt"), ".")]
-         if CON_AUDIO else []) + FFMPEG,
+         if CON_AUDIO else []) + FFMPEG + CLAVE,
     hiddenimports=[
         # Los importa el server por nombre y PyInstaller no siempre los ve.
         "server", "jobs",
@@ -131,7 +141,11 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="Migrador de Catalogos" + (" (con audio)" if CON_AUDIO else ""),
+    # El sufijo MOJO deja a la vista que ese binario trae la clave de la
+    # organizacion adentro y no se publica.
+    name=("Migrador de Catalogos"
+          + (" (con audio)" if CON_AUDIO else "")
+          + (" MOJO" if CON_CLAVE else "")),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

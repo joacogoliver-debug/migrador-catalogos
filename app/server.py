@@ -93,8 +93,43 @@ def dir_datos():
 # Clave de YouTube
 # ============================================================
 
+def _clave_incluida():
+    """Clave de YouTube que viene dentro del ejecutable, o "".
+
+    Existe para los builds internos: `build/build.py --con-clave` mete la clave de
+    la organización adentro del binario, así el equipo lo abre y funciona sin que
+    cada persona tenga que crear su propio proyecto en Google Cloud.
+
+    Va guardada con un XOR simple, que NO es seguridad: cualquiera con el
+    ejecutable puede sacarla. Sólo evita que aparezca en un `strings` del binario
+    y que la levante un scraper automático. Por eso un build hecho con --con-clave
+    NO se publica: se reparte a mano a quien corresponda.
+    """
+    ruta = os.path.join(_base_recursos(), "clave_yt.dat")
+    if not os.path.exists(ruta):
+        return ""
+    try:
+        with open(ruta, "rb") as f:
+            datos = f.read()
+        if len(datos) < 2:
+            return ""
+        semilla, cuerpo = datos[0], datos[1:]
+        return bytes(b ^ semilla for b in cuerpo).decode("utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
 def leer_clave():
-    """Busca la clave en el entorno y después en el archivo del usuario."""
+    """Devuelve la clave de YouTube a usar.
+
+    Orden de prioridad, de más específico a más general:
+      1. la variable de entorno YOUTUBE_API_KEY;
+      2. la que el usuario cargó en la app (queda en su carpeta personal);
+      3. la que viene dentro del ejecutable, si es un build interno.
+
+    Así, aunque el binario traiga la clave de la organización, quien quiera usar
+    la propia la carga en la app y esa gana.
+    """
     k = os.environ.get("YOUTUBE_API_KEY", "").strip()
     if k:
         return k
@@ -102,10 +137,12 @@ def leer_clave():
     if os.path.exists(p):
         try:
             with open(p, encoding="utf-8") as f:
-                return (json.load(f).get("youtube_api_key") or "").strip()
+                propia = (json.load(f).get("youtube_api_key") or "").strip()
+            if propia:
+                return propia
         except (OSError, ValueError):
-            return ""
-    return ""
+            pass
+    return _clave_incluida()
 
 
 def guardar_clave(clave):
@@ -226,6 +263,9 @@ def api_config():
     return {
         "version": VERSION,
         "tiene_clave": bool(leer_clave()),
+        # Para poder aclarar en la interfaz que está usando la clave de la
+        # organización y no una propia.
+        "clave_incluida": bool(_clave_incluida()) and not os.environ.get("YOUTUBE_API_KEY", "").strip(),
         "audio_habilitado": AUDIO_HABILITADO,
         "entorno": ent,
         "tidal_conectada": bool(ESTADO.tidal and ESTADO.tidal.conectada),

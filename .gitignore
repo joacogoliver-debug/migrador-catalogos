@@ -16,3 +16,4 @@ _dev_*.py
 _smoke*.py
 _ui_smoke.py
 build/terceros/ffmpeg.exe
+build/terceros/clave_yt.dat
