@@ -43,13 +43,18 @@ CON_AUDIO = os.environ.get("MIGRADOR_BUILD_AUDIO", "") == "1"
 
 # Build interno con la clave de la organizacion adentro (`--con-clave`). Ese
 # binario NO se publica: se reparte a mano. build.py deja el archivo listo.
-CON_CLAVE = os.environ.get("MIGRADOR_BUILD_CLAVE", "") == "1"
 CLAVE = []
-if CON_CLAVE:
+if os.environ.get("MIGRADOR_BUILD_CLAVE", "") == "1":
     _cl = os.path.join(RAIZ, "build", "terceros", "clave_yt.dat")
     if os.path.exists(_cl):
         CLAVE = [(_cl, ".")]
         print("[spec] clave de YouTube incluida (build interno, no publicar)")
+    else:
+        print("[spec] ATENCION: se pidio --con-clave pero falta clave_yt.dat")
+
+# El sufijo del nombre depende de que la clave este REALMENTE adentro, no de que
+# se haya pedido: un binario llamado MOJO que no la trae confunde a quien lo usa.
+CON_CLAVE = bool(CLAVE)
 
 # La variante con audio deja este archivo adentro del ejecutable. El servidor lo
 # busca para prender el módulo sin depender de una variable de entorno: en un

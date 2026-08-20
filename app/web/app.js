@@ -285,15 +285,28 @@ function vistaPaso1() {
     <div class="card-head">
       <div class="eyebrow">Paso 1 de 4</div>
       <h1>¿Qué catálogo querés migrar?</h1>
-      <p>Pegá el link del canal de YouTube del artista. Sirve el canal Topic, el canal oficial o un <span class="mono">@handle</span>.</p>
+      <p>Pegá el link del canal de YouTube del artista. Lo ideal es el
+      <strong>canal Topic</strong>, el que se llama <span class="mono">«&lt;artista&gt; - Topic»</span>.</p>
     </div>
 
     <div class="field">
       <input class="input input-lg" id="url" type="url" spellcheck="false"
-             placeholder="https://www.youtube.com/@Artista"
+             placeholder="https://www.youtube.com/channel/UC…  (el canal Topic)"
              ${corriendo ? 'disabled' : ''} />
-      <span class="hint">Ejemplo: <span class="mono">https://www.youtube.com/channel/UC…</span></span>
+      <span class="hint">Acepta la URL del canal o un <span class="mono">@handle</span>.</span>
     </div>
+
+    ${alerta('', '💡', `
+      <strong>Conviene pegar el canal Topic.</strong>
+      Es el que YouTube genera solo con el catálogo distribuido, y el único que
+      trae distribuidora, álbum, año y sello en cada descripción.
+      <p style="margin-top:8px">
+        Si pegás el canal oficial del artista igual funciona: la app busca su Topic
+        y usa ese. Pero esa búsqueda <strong>gasta unas 100 consultas del cupo
+        diario</strong> —relevar un catálogo entero gasta 20— y en artistas con
+        nombres parecidos puede elegir el Topic equivocado. Pegando el Topic
+        directo eso no pasa.
+      </p>`)}
 
     <label class="check" style="margin-top:18px">
       <input type="checkbox" id="con-codigos" checked ${corriendo ? 'disabled' : ''} />
