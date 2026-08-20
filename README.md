@@ -163,8 +163,12 @@ python app/launcher.py
 En Windows podés usar `ABRIR_APP.bat`; en macOS/Linux, `./abrir_app.sh`. Los dos
 instalan las dependencias la primera vez.
 
-Si `pywebview` está instalado, la app abre en una ventana nativa; si no, en tu
-navegador por defecto. Las dos opciones funcionan igual.
+La app abre en **su propia ventana**, no en el navegador: usa `pywebview` sobre
+el motor web del sistema (WebView2 en Windows, WebKit en macOS). Si por algo no
+puede, cae al motor del sistema en modo aplicación —ventana propia, sin barra de
+direcciones ni pestañas— y si tampoco, al navegador. `--diagnostico` escribe un
+reporte de qué puede hacer la app en esa máquina, útil porque el ejecutable se
+compila sin consola.
 
 ### Compilar el ejecutable
 
@@ -232,7 +236,8 @@ Sin frameworks ni build step, para que empaquetar sea copiar archivos:
 | `app/launcher.py` | Punto de entrada: puerto libre, servidor, ventana o navegador |
 | `app/server.py` | API JSON y servidor de estáticos |
 | `app/jobs.py` | Trabajos en segundo plano con progreso y cancelación |
-| `app/web/` | La interfaz (html, css, js, tokens) |
+| `app/web/` | La interfaz (html, css, js) |
+| `app/web/tokens/` | Paleta, tipografía y espaciado |
 | `migrar_core.py` | Orquesta los 4 pasos |
 | `relevar_core.py` | Relevamiento de YouTube + ISRC/UPC por Deezer |
 | `productos.py` | Agrupa tracks en productos y filtra la selección |

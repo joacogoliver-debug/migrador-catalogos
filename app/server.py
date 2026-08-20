@@ -405,6 +405,10 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"error": str(mensaje)}, codigo)
 
     def _leer_body(self):
+        """Lee y consume el cuerpo del pedido. Devuelve {} si viene vacío.
+
+        Consumirlo es obligatorio aunque no se use: ver la nota en do_POST.
+        """
         largo = int(self.headers.get("Content-Length") or 0)
         if largo <= 0:
             return {}
@@ -502,6 +506,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         ruta = urllib.parse.urlparse(self.path).path
+
+        # El cuerpo se lee SIEMPRE y antes que nada, incluso en las rutas que no
+        # lo usan. Con HTTP/1.1 la conexión se reutiliza, así que un cuerpo sin
+        # leer queda en el socket y se mete adelante del pedido siguiente: el
+        # método terminaba parseándose como '{}POST' y el servidor respondía 501
+        # "Unsupported method". Se veía como un error aleatorio de Tidal que
+        # desaparecía al reintentar (porque el reintento abría otra conexión).
+        try:
+            cuerpo = self._leer_body()
+        except ValueError as e:
+            return self._error(e, HTTPStatus.BAD_REQUEST)
+
         try:
             if ruta in RUTAS_POST_SIN_BODY:
                 return self._json(RUTAS_POST_SIN_BODY[ruta]())
@@ -517,7 +533,7 @@ class Handler(BaseHTTPRequestHandler):
             fn = RUTAS_POST.get(ruta)
             if not fn:
                 return self._error("No encontrado.", HTTPStatus.NOT_FOUND)
-            return self._json(fn(self._leer_body()))
+            return self._json(fn(cuerpo))
 
         except ValueError as e:
             # Errores esperables y mostrables al usuario.

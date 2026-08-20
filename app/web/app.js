@@ -92,14 +92,39 @@ async function esperarJob(job, alAvanzar) {
 
 const PASOS = ['Pegá el link', 'Elegí productos', 'Elegí qué bajar', 'Descargá'];
 
+/** ¿Se puede ir a ese paso? Nada de saltar a un paso sin los datos que necesita.
+ *  Volver atrás siempre se puede: el estado de los pasos anteriores se conserva. */
+function pasoAlcanzable(n) {
+  if (S.ocupado) return false;             // en medio de un trabajo no se navega
+  if (n === 1) return true;
+  if (n === 2) return !!S.catalogo;
+  if (n === 3) return !!S.catalogo && seleccionados().length > 0;
+  if (n === 4) return !!S.resultado;
+  return false;
+}
+
 function renderStepper() {
   const partes = [];
   PASOS.forEach((nombre, i) => {
     const n = i + 1;
-    const clase = S.paso === n ? 'activo' : (S.paso > n ? 'hecho' : '');
-    partes.push(
-      `<div class="step ${clase}"><span class="step-num">${S.paso > n ? '✓' : n}</span><span>${esc(nombre)}</span></div>`
-    );
+    const actual = S.paso === n;
+    const clase = actual ? 'activo' : (S.paso > n ? 'hecho' : '');
+    const puede = !actual && pasoAlcanzable(n);
+    // Los alcanzables son botones de verdad: se puede volver con el mouse y con
+    // el teclado. Antes sólo se avanzaba, y para corregir una selección había que
+    // relevar todo de nuevo.
+    if (puede) {
+      partes.push(
+        `<button type="button" class="step ${clase} clickable" data-ir-paso="${n}"
+                 title="Volver a: ${esc(nombre)}">` +
+        `<span class="step-num">${S.paso > n ? '✓' : n}</span><span>${esc(nombre)}</span></button>`
+      );
+    } else {
+      partes.push(
+        `<div class="step ${clase}${actual ? '' : ' inerte'}" ${actual ? 'aria-current="step"' : ''}>` +
+        `<span class="step-num">${S.paso > n ? '✓' : n}</span><span>${esc(nombre)}</span></div>`
+      );
+    }
     if (n < PASOS.length) partes.push('<div class="step-linea"></div>');
   });
   $('#stepper').innerHTML = partes.join('');
@@ -707,6 +732,70 @@ function panelValidacion(v) {
   </div>`;
 }
 
+/* ------------------------------------------------------------ Tidal */
+
+/** Traduce los códigos crudos a algo que se entienda. */
+function mensajeTidal(crudo) {
+  const c = String(crudo || '').toLowerCase();
+  if (c.includes('501') || c.includes('unsupported method')) {
+    return 'Se cortó la comunicación con la app. Probá de nuevo.';
+  }
+  if (c.includes('expired')) {
+    return 'El código venció. Cerrá esto y volvé a conectar la cuenta.';
+  }
+  if (c.includes('authorization_pending') || c.includes('pendiente') || c.includes('slow_down')) {
+    return 'Todavía no me llegó la confirmación de Tidal.';
+  }
+  if (c.includes('invalid') || c.includes('token')) {
+    return 'Tidal rechazó la conexión. Volvé a intentar desde el principio.';
+  }
+  if (c.includes('failed to fetch') || c.includes('networkerror')) {
+    return 'No pude hablar con Tidal. ¿Hay conexión a internet?';
+  }
+  return crudo || 'No se pudo conectar.';
+}
+
+/** Una consulta de estado. `manual` distingue el clic del poll automático. */
+async function _confirmarTidal({ manual }) {
+  if (!S.tidal) return false;
+  try {
+    const d = await api('/api/tidal/confirmar', { device_code: S.tidal.device_code });
+    if (d.conectada) {
+      S.tidal = null;
+      S.config = await api('/api/config');
+      render();
+      return true;
+    }
+    if (d.estado === 'pendiente') {
+      // El poll automático NO toca el aviso: si lo borrara, pisaría el mensaje
+      // que dejó el clic en "Ya confirmé" y el botón parecería no hacer nada.
+      if (manual) {
+        S.tidal.aviso = 'Todavía no confirmaste en Tidal. Completá el acceso en la otra pestaña; '
+                      + 'en cuanto lo hagas se conecta solo, sin volver a apretar.';
+      }
+    } else {
+      S.tidal.aviso = mensajeTidal(d.estado);
+    }
+    render();
+  } catch (e) {
+    if (S.tidal) S.tidal.aviso = mensajeTidal(e.message);
+    render();
+  }
+  return false;
+}
+
+/** Consulta sola hasta que se conecte o venza el código. */
+async function _pollTidal() {
+  const mio = S.tidal;
+  // 3 s y no 2: Tidal responde `slow_down` si se consulta muy seguido, y el
+  // usuario además puede apretar "Ya confirmé" en el medio.
+  for (let i = 0; i < 100 && S.tidal === mio && mio.esperando; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    if (S.tidal !== mio) return;                 // canceló o reinició
+    if (await _confirmarTidal({ manual: false })) return;
+  }
+}
+
 /* ------------------------------------------------------------ acciones */
 
 const ACCIONES = {
@@ -771,32 +860,31 @@ const ACCIONES = {
   'sel-nada'() { productosFiltrados().forEach((p) => S.seleccion.delete(p.id)); render(); },
 
   async 'tidal-iniciar'() {
+    S.error = '';
     try {
       const d = await api('/api/tidal/iniciar', {});
-      S.tidal = { url: d.url, codigo: d.codigo, device_code: d.device_code };
+      S.tidal = { url: d.url, codigo: d.codigo, device_code: d.device_code, esperando: true };
       // Le abrimos el sitio de Tidal para que no tenga que copiar el link.
       window.open(d.url, '_blank', 'noopener');
       render();
-    } catch (e) { S.error = e.message; render(); }
+      // Y consultamos solos: Tidal tarda unos segundos en registrar la
+      // confirmación, así que si dependiera del botón el usuario apretaría justo
+      // antes y vería un error que no es un error.
+      _pollTidal();
+    } catch (e) { S.error = mensajeTidal(e.message); render(); }
   },
 
   async 'tidal-confirmar'() {
     if (!S.tidal) return;
-    try {
-      const d = await api('/api/tidal/confirmar', { device_code: S.tidal.device_code });
-      if (d.conectada) {
-        S.tidal = null;
-        S.config = await api('/api/config');
-      } else if (d.estado === 'pendiente') {
-        S.tidal.aviso = 'Todavía no me llegó la confirmación. Completá el acceso en Tidal y volvé a apretar.';
-      } else {
-        S.tidal.aviso = `Falló la conexión (${d.estado}). Probá de nuevo.`;
-      }
-      render();
-    } catch (e) { S.error = e.message; render(); }
+    S.error = '';                    // el aviso anterior no debe quedar pegado
+    S.tidal.aviso = 'Consultando…';
+    render();
+    await _confirmarTidal({ manual: true });
   },
 
   async 'tidal-salir'() {
+    if (S.tidal) S.tidal.esperando = false;       // corta el poll automático
+    S.error = '';
     try { await api('/api/tidal/desconectar', {}); } catch (_) {}
     S.tidal = null;
     S.config = await api('/api/config');
@@ -851,6 +939,13 @@ document.addEventListener('click', (ev) => {
   if (btnAccion) {
     const fn = ACCIONES[btnAccion.dataset.accion];
     if (fn) { ev.preventDefault(); fn(); }
+    return;
+  }
+
+  const irPaso = ev.target.closest('[data-ir-paso]');
+  if (irPaso) {
+    const n = parseInt(irPaso.dataset.irPaso, 10);
+    if (pasoAlcanzable(n)) { S.paso = n; S.error = ''; render(); }
     return;
   }
 

@@ -1,35 +1,41 @@
+/* ============================================================
+   Espaciado, radios y movimiento.
+
+   Radios chicos a propósito: 3px para controles, 5px para paneles. Nada de
+   esquinas de 16-20px, que es lo que hace que todo parezca la misma plantilla.
+
+   Sombras: casi ninguna. El espacio delimita, y cuando hace falta un borde se
+   usa un borde. Nunca las dos cosas juntas.
+   ============================================================ */
+
 :root {
-  /* Spacing scale (4px base) */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10:40px;
-  --space-12:48px;
-  --space-16:64px;
+  --space-6: 28px;
+  --space-8: 40px;
+  --space-10:56px;
+  --space-12:72px;
+  --space-16:104px;
 
-  /* Layout */
-  --container-max: 1100px;   /* centered content width */
-  --container-pad: 32px;
+  --container-max: 1140px;
+  --container-pad: 40px;
 
-  /* Radii — soft, rounded corners */
-  --radius-sm: 8px;
-  --radius-md: 12px;   /* inputs, buttons */
-  --radius-lg: 16px;   /* cards */
-  --radius-xl: 20px;   /* hero / large panels */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 5px;
+  --radius-xl: 6px;
   --radius-pill: 999px;
 
-  /* Shadows — soft and subtle */
-  --shadow-xs: 0 1px 2px rgba(17,19,22,0.05);
-  --shadow-sm: 0 1px 3px rgba(17,19,22,0.06), 0 1px 2px rgba(17,19,22,0.04);
-  --shadow-md: 0 4px 16px rgba(17,19,22,0.07);
-  --shadow-lg: 0 12px 32px rgba(17,19,22,0.10);
+  /* Una sola sombra, y muy contenida: sólo para lo que flota de verdad. */
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: 0 1px 2px rgba(23,25,26,.05);
+  --shadow-lg: 0 -1px 0 var(--border-subtle), 0 -12px 28px rgba(23,25,26,.06);
 
-  /* Motion */
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* @kind other */
-  --dur-fast: 120ms; /* @kind other */
-  --dur-base: 180ms; /* @kind other */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.25, 1);
+  --dur-fast: 110ms;
+  --dur-base: 200ms;
 }

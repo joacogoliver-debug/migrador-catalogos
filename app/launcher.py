@@ -35,13 +35,16 @@ TITULO = "Migrador de Catálogos · MOJO"
 # ============================================================
 
 def _abrir_ventana_pywebview(url):
-    """Ventana nativa con pywebview. Sólo con --ventana-nativa.
+    """Ventana nativa propia. Es el camino por defecto: la app tiene que sentirse
+    un programa, no una pestaña del navegador.
 
-    No es el camino por defecto porque empaquetado NO funciona: el backend de
-    Windows va por pythonnet/.NET, PyInstaller no logra llevarse el runtime y
-    `webview.start()` se queda colgado sin abrir ventana y sin lanzar ninguna
-    excepción. Eso es peor que fallar: bloquea el hilo principal y nunca se llega
-    a la alternativa. Desde el código fuente sí funciona.
+    `webview.start()` bloquea el hilo principal con el bucle de mensajes de la
+    ventana y recién vuelve cuando el usuario la cierra, así que tiene que
+    llamarse desde el hilo principal (en macOS es obligatorio). El servidor HTTP
+    ya corre en su propio hilo.
+
+    Devuelve False si pywebview no está o si no pudo abrir: ahí se usa el
+    navegador en modo aplicación, que no depende de nada extra.
     """
     try:
         import webview
@@ -128,13 +131,38 @@ def _diagnostico(url):
 
     lineas += ["", "ventana:"]
     try:
-        import webview  # noqa: F401
+        import webview
         lineas.append("  pywebview importa: si")
+        # Y ahora lo que de verdad importa: intentar abrirla. Que el import ande
+        # no significa que el backend pueda crear una ventana, y ese es
+        # exactamente el caso que no se ve de ninguna otra forma en un binario
+        # compilado sin consola.
+        import threading as _th
+        estado = {"abrio": False, "error": None}
+
+        def _cerrar():
+            import time as _t
+            _t.sleep(4)
+            try:
+                estado["abrio"] = len(webview.windows) > 0
+                for w in list(webview.windows):
+                    w.destroy()
+            except Exception as e:
+                estado["error"] = f"al cerrar: {e}"
+
         try:
-            import webview.guilib as g
-            lineas.append(f"  backend gui: {getattr(g, 'guilib', None) or 'sin inicializar'}")
+            _th.Thread(target=_cerrar, daemon=True).start()
+            webview.create_window("Prueba de ventana", html="<p>prueba</p>",
+                                  width=420, height=240)
+            webview.start()
+            lineas.append(f"  abrir una ventana de prueba: {'si' if estado['abrio'] else 'no abrio'}")
+            if estado["error"]:
+                lineas.append(f"  detalle: {estado['error']}")
         except Exception as e:
-            lineas.append(f"  backend gui: error ({e})")
+            import traceback
+            lineas.append(f"  abrir una ventana de prueba: FALLO ({type(e).__name__}: {e})")
+            for _l in traceback.format_exc().splitlines():
+                lineas.append("    " + _l)
     except Exception as e:
         lineas.append(f"  pywebview importa: no ({e})")
 
@@ -170,8 +198,8 @@ def main(argv=None):
                     help="No abrir la interfaz; sólo dejar el servidor escuchando.")
     ap.add_argument("--navegador", action="store_true",
                     help="Abrir en el navegador normal, con pestañas y barra de direcciones.")
-    ap.add_argument("--ventana-nativa", action="store_true", dest="ventana_nativa",
-                    help="Usar pywebview. Sólo desde el código: empaquetado se cuelga.")
+    ap.add_argument("--sin-ventana-nativa", action="store_true", dest="sin_nativa",
+                    help="No usar la ventana propia; abrir con el motor web del sistema.")
     ap.add_argument("--diagnostico", action="store_true",
                     help="Escribir un reporte de qué puede hacer la app y salir.")
     args = ap.parse_args(argv)
@@ -202,8 +230,9 @@ def main(argv=None):
             import webbrowser
             webbrowser.open(url)
             hilo.join()
-        elif args.ventana_nativa and _abrir_ventana_pywebview(url):
-            # La ventana se cerró: la app termina con ella.
+        elif not args.sin_nativa and _abrir_ventana_pywebview(url):
+            # La ventana se cerró: la app termina con ella, como cualquier
+            # programa de escritorio.
             pass
         elif _navegador_app(url):
             # Ventana propia, sin barra de direcciones ni pestañas: se ve y se usa

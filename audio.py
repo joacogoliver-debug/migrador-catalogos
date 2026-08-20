@@ -164,7 +164,13 @@ class TidalSession:
         try:
             auth = AuthAPI().get_auth(device_code)
         except AuthClientError as e:
-            return "pendiente" if e.error == "authorization_pending" else f"error: {e.error}"
+            # authorization_pending: la persona todavía no confirmó.
+            # slow_down: confirmamos demasiado seguido; tampoco es un error, sólo
+            # hay que esperar un poco más. Devolver "error: slow_down" hacía que
+            # la interfaz mostrara un código crudo por algo que estaba yendo bien.
+            if e.error in ("authorization_pending", "slow_down"):
+                return "pendiente"
+            return f"error: {e.error}"
 
         # Guardamos SÓLO lo que la API necesita. El resto del perfil (email,
         # nombre, dirección, teléfono, cumpleaños) se descarta a propósito.

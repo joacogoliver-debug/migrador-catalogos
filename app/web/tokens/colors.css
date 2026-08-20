@@ -1,44 +1,92 @@
+/* ============================================================
+   Paleta — piedra cálida + tinta, con UN solo acento.
+
+   Nada de negro puro ni de neón. Los neutros están construidos sobre una base
+   cálida (un pelo de amarillo/rojo en el hue) para que el gris no se lea
+   "pantalla apagada" sino papel; el oscuro es una tinta verde-azulada muy
+   desaturada, no #000.
+
+   El amarillo MOJO se conserva pero deja de ser un fondo grande: pasa a ser
+   señal. Se usa en el CTA, en el paso activo y en subrayados finos. Todo lo
+   demás resuelve con tinta y espacio.
+   ============================================================ */
+
 :root {
-  /* ---- Brand ---- */
-  --mojo-yellow: #F5DA00;        /* primary accent, extracted from logo */
-  --mojo-yellow-hover: #E4CA00;  /* button hover */
-  --mojo-yellow-press: #CDB500;  /* button press */
-  --mojo-yellow-soft: #FEF8C9;   /* tint fill / highlight bg */
-  --mojo-black: #111316;         /* brand near-black (header, ink) */
+  /* ---- Marca ---- */
+  --mojo-yellow: #F2D302;        /* acento único, un punto menos saturado */
+  --mojo-ink:    #17191A;        /* tinta: casi negro pero con verde-azul */
 
-  /* ---- Neutrals ---- */
-  --neutral-0:  #FFFFFF;   /* page / card surface */
-  --neutral-50: #F7F8F9;   /* app background, zebra rows */
-  --neutral-100:#F0F1F3;   /* subtle fill */
-  --neutral-200:#E6E8EC;   /* borders, dividers */
-  --neutral-300:#D3D7DD;   /* strong border, input outline */
-  --neutral-400:#9AA0AA;   /* disabled text, placeholder */
-  --neutral-500:#6B7280;   /* muted / secondary text */
-  --neutral-700:#3A3F47;   /* body text */
-  --neutral-900:#111316;   /* headings, near-black */
+  /* ---- Neutros cálidos (piedra / tiza) ---- */
+  --stone-0:   #FDFCFA;   /* tiza: superficie elevada */
+  --stone-50:  #F7F5F1;   /* papel: fondo de página */
+  --stone-100: #EFEDE7;   /* relleno sutil */
+  --stone-200: #E2DFD7;   /* líneas */
+  --stone-300: #CFCBC1;   /* línea marcada */
+  --stone-400: #918C82;   /* placeholder / inactivo (no requiere 4.5) */
+  --stone-500: #6E6960;   /* texto secundario — 5.0:1 sobre la página, pasa AA */
+  --stone-700: #46433E;   /* cuerpo */
+  --stone-900: #23211F;   /* títulos */
 
-  /* ---- Semantic ---- */
-  --success:    #1B9E5A;
-  --success-soft:#E6F5EC;
-  --danger:     #DC2626;
-  --danger-soft:#FDECEC;
-  --info:       #2563EB;
+  /* ---- Semánticos, desaturados a propósito ---- */
+  --success:      #3F6B4F;
+  --success-soft: #E8EFE7;
+  --danger:       #A33B2E;
+  --danger-soft:  #F6E9E5;
+  --warn:         #8A6420;
+  --warn-soft:    #F7EFDF;
+  --info:         #2E4A6B;
+  --info-soft:    #E8EDF3;
 
-  /* ---- Aliases (use these in components) ---- */
-  --surface-page:    var(--neutral-50);
-  --surface-card:    var(--neutral-0);
-  --surface-subtle:  var(--neutral-100);
-  --surface-header:  var(--mojo-black);
-  --border-subtle:   var(--neutral-200);
-  --border-strong:   var(--neutral-300);
-  --text-heading:    var(--neutral-900);
-  --text-body:       var(--neutral-700);
-  --text-muted:      var(--neutral-500);
-  --text-placeholder:var(--neutral-400);
-  --text-on-accent:  var(--mojo-black);
-  --text-on-dark:    var(--neutral-0);
+  /* ---- Alias ---- */
+  --surface-page:    var(--stone-50);
+  --surface-card:    var(--stone-0);
+  --surface-subtle:  var(--stone-100);
+  --surface-header:  var(--mojo-ink);
+  --border-subtle:   var(--stone-200);
+  --border-strong:   var(--stone-300);
+  --text-heading:    var(--stone-900);
+  --text-body:       var(--stone-700);
+  --text-muted:      var(--stone-500);
+  --text-placeholder:var(--stone-400);
+  --text-on-accent:  var(--mojo-ink);
+  --text-on-dark:    var(--stone-0);
   --accent:          var(--mojo-yellow);
-  --accent-hover:    var(--mojo-yellow-hover);
-  --accent-press:    var(--mojo-yellow-press);
-  --focus-ring:      rgba(245, 218, 0, 0.45);
+  --accent-press:    #D9BE02;
+  --focus-ring:      rgba(35, 33, 31, 0.30);
+
+  /* Compatibilidad con nombres usados en la hoja de componentes. */
+  --neutral-0:   var(--stone-0);
+  --neutral-50:  var(--stone-50);
+  --neutral-100: var(--stone-100);
+  --neutral-200: var(--stone-200);
+  --neutral-300: var(--stone-300);
+  --neutral-400: var(--stone-400);
+  --neutral-500: var(--stone-500);
+  --neutral-700: var(--stone-700);
+  --neutral-900: var(--stone-900);
+  --mojo-black:  var(--mojo-ink);
+}
+
+/* ---- Oscuro: verde bosque apagado, no negro ---- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    --stone-0:   #1B1F1D;   /* superficie elevada */
+    --stone-50:  #141817;   /* fondo de página */
+    --stone-100: #222826;
+    --stone-200: #2E3533;
+    --stone-300: #414947;
+    --stone-400: #6E7674;
+    --stone-500: #9AA19E;
+    --stone-700: #C9CECB;
+    --stone-900: #F0F2F0;
+
+    --success-soft: #17251C;
+    --danger-soft:  #2A1A17;
+    --warn-soft:    #26200F;
+    --info-soft:    #16202C;
+
+    --surface-header:  #0F1211;
+    --text-on-accent:  #141817;
+    --focus-ring:      rgba(242, 211, 2, 0.40);
+  }
 }

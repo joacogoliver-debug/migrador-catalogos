@@ -1,28 +1,41 @@
+/* ============================================================
+   Tipografía — contraste entre una serif de display y una sans geométrica.
+
+   El emparejamiento es la decisión de diseño más visible: los títulos van en
+   una serif de contraste alto (Fraunces), que le pone voz a la interfaz, y todo
+   el cuerpo en una sans geométrica y neutra (Archivo). Los códigos —ISRC, UPC—
+   van en mono, que además ayuda a leerlos y compararlos.
+
+   La escala es deliberadamente contrastada: el salto del título al cuerpo es
+   grande, así la jerarquía se ve de un vistazo y no hace falta decorar nada.
+   ============================================================ */
+
 :root {
-  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-display: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --font-body: 'Archivo', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
   --font-sans: var(--font-body);
 
-  /* Type scale (desktop-first) */
-  --text-display: 2rem;      /* 32px — page title */
-  --text-h1:      1.5rem;    /* 24px — section heading */
-  --text-h2:      1.25rem;   /* 20px — subsection */
-  --text-h3:      1.0625rem; /* 17px — card heading */
-  --text-lg:      1.125rem;  /* 18px — large input / lead */
-  --text-base:    0.9375rem; /* 15px — body, tables */
-  --text-sm:      0.8125rem; /* 13px — secondary, captions */
-  --text-xs:      0.6875rem; /* 11px — labels, eyebrows */
+  /* Escala con saltos grandes: 13 · 15 · 17 · 21 · 27 · 40 */
+  --text-display: 2.5rem;
+  --text-h1:      1.6875rem;
+  --text-h2:      1.3125rem;
+  --text-h3:      1.0625rem;
+  --text-lg:      1.0625rem;
+  --text-base:    0.9375rem;
+  --text-sm:      0.8125rem;
+  --text-xs:      0.6875rem;
 
   --weight-regular: 400;
   --weight-medium:  500;
   --weight-semibold:600;
   --weight-bold:    700;
-  --weight-extra:   900; /* Alegreya Sans Black */
+  --weight-extra:   900;
 
-  --leading-tight: 1.15;
-  --leading-snug:  1.35;
-  --leading-normal:1.55;
+  --leading-tight: 1.06;    /* títulos serif bien ajustados */
+  --leading-snug:  1.4;
+  --leading-normal:1.6;     /* cuerpo aireado */
 
-  --tracking-tight: -0.02em;
-  --tracking-eyebrow: 0.06em;  /* uppercase labels */
+  --tracking-tight: -0.022em;
+  --tracking-eyebrow: 0.14em;   /* versalitas bien espaciadas */
 }

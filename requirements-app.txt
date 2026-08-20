@@ -7,12 +7,10 @@
 # Generar los Excel del entregable.
 openpyxl>=3.1
 
-# NO hace falta. La app abre en su propia ventana usando el motor web que ya
-# tiene la máquina (modo aplicación: sin barra de direcciones ni pestañas), así
-# que no necesita un motor propio.
+# Ventana propia de la aplicación, para que sea un programa y no una pestaña del
+# navegador. En Windows usa WebView2 (ya viene con el sistema) a través de
+# pythonnet, que se instala solo como dependencia.
 #
-# pywebview queda como alternativa para quien la quiera al correr desde el
-# código (`python app/launcher.py --ventana-nativa`). Empaquetado no sirve: su
-# backend de Windows va por pythonnet/.NET y se cuelga sin abrir la ventana.
-#
-#   pip install pywebview
+# Si falta, la app abre igual usando el motor web del sistema en modo aplicación
+# (ventana sin barra de direcciones ni pestañas).
+pywebview>=5.0

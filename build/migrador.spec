@@ -74,11 +74,12 @@ a = Analysis(
         "validar", "paquete", "migrar_core", "audio",
         # openpyxl carga sus writers de forma perezosa.
         "openpyxl.cell._writer",
-        # pywebview NO se empaqueta: su backend de Windows va por pythonnet/.NET,
-        # PyInstaller no logra llevarse el runtime y webview.start() se queda
-        # colgado sin abrir ventana. La app usa el motor web de la máquina en modo
-        # aplicación (ventana propia, sin barra ni pestañas), que no necesita
-        # empaquetar nada.
+        # Ventana nativa propia. Alcanza con nombrar "webview":
+        # pyinstaller-hooks-contrib trae hook-webview / hook-clr /
+        # hook-clr_loader y se encarga del backend y del runtime .NET.
+        # Forzar a mano los submodulos de plataforma rompe la seleccion de
+        # backend, que es lo que hacia que no abriera ninguna ventana.
+        "webview",
     ],
     hookspath=[],
     runtime_hooks=[],
@@ -94,8 +95,6 @@ a = Analysis(
         "tkinter", "unittest", "pydoc", "doctest", "test",
         "numpy", "pandas", "matplotlib", "PIL",
         "streamlit", "fastapi", "uvicorn", "pytest",
-        # Ver la nota de hiddenimports: no se usa y arrastra pythonnet.
-        "webview", "clr", "clr_loader", "pythonnet",
     ] + ([] if CON_AUDIO else DEPS_AUDIO),
     noarchive=False,
 )

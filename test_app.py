@@ -298,6 +298,51 @@ def main():
         expect("api.cancelar_existente", cod, 200)
         expect("api.cancelar_inexistente", post("/api/job/deadbeef/cancelar", {})[0], 404)
 
+        # --- keep-alive: el cuerpo se consume aunque la ruta no lo use -----
+        # Bug real: las rutas "sin body" no leían el cuerpo, y con HTTP/1.1 esos
+        # bytes quedaban en el socket y se metían adelante del pedido siguiente.
+        # El método se parseaba como '{}POST' y el servidor devolvía 501. Se veía
+        # como un error aleatorio de Tidal que se arreglaba al reintentar, porque
+        # el reintento abría otra conexión. Por eso hay que probar DOS pedidos
+        # sobre LA MISMA conexión.
+        import http.client
+        conn = http.client.HTTPConnection("127.0.0.1", puerto, timeout=20)
+        try:
+            cuerpo = json.dumps({}).encode()
+            cabeceras = {"Content-Type": "application/json",
+                         "Content-Length": str(len(cuerpo))}
+
+            # 1) una ruta que NO usa el cuerpo, pero que lo recibe
+            conn.request("POST", "/api/tidal/desconectar", body=cuerpo, headers=cabeceras)
+            r1 = conn.getresponse()
+            leido1 = r1.read()
+            expect("keepalive.primera", r1.status, 200)
+
+            # 2) sobre la MISMA conexión, otra ruta
+            # id inexistente -> 400 deterministico: prueba que la ruta corrio
+            # y produjo SU error, no un error de parseo del pedido.
+            cuerpo2 = json.dumps({"ids": ["noexiste"]}).encode()
+            conn.request("POST", "/api/validar", body=cuerpo2,
+                         headers={"Content-Type": "application/json",
+                                  "Content-Length": str(len(cuerpo2))})
+            r2 = conn.getresponse()
+            leido2 = r2.read()
+            # Lo que importa: NO 501. 400 es la respuesta correcta (sin selección).
+            check("keepalive.segunda_no_501", r2.status != 501,
+                  f"status={r2.status} razon={r2.reason!r}: el cuerpo anterior "
+                  "contaminó el parseo del pedido siguiente")
+            expect("keepalive.segunda", r2.status, 400)
+
+            # 3) una tercera, para confirmar que la conexión sigue sana
+            conn.request("POST", "/api/validar", body=cuerpo2,
+                         headers={"Content-Type": "application/json",
+                                  "Content-Length": str(len(cuerpo2))})
+            r3 = conn.getresponse()
+            r3.read()
+            expect("keepalive.tercera", r3.status, 400)
+        finally:
+            conn.close()
+
         # --- body inválido ---
         req = urllib.request.Request(f"{base}/api/validar", data=b"{no es json}",
                                      headers={"Content-Type": "application/json"}, method="POST")
